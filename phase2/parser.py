@@ -41,31 +41,61 @@ class Parser:
         self.lookahead = self.scanner.get_next_token()
         while self.lookahead is None:
             self.lookahead = self.scanner.get_next_token()
-        self.lookahead = str(self.lookahead)
+        # self.lookahead = str(self.lookahead)
         self.set_token(self.lookahead)
         self.set_char(self.lookahead)
         self.set_line_no(self.lookahead)
 
     def set_char(self, lk):
-        lk = lk[3:]
-        lk = lk.split(', ')
-        lk = lk[1]
-        lk = lk[:-2]
-        self.char = lk[1:]
-        print(self.char)
+        # lk = lk[3:]
+        # lk = lk.split(', ')
+        # lk = lk[1]
+        # lk = lk[:-2]
+        # self.char = lk[1:]
+        # print(self.char)
+        self.char = lk[0][1]
 
     def set_line_no(self, lk):
-        lk = lk[3:]
-        lk = lk[:-1]
-        lk = lk.split(', ')
-        self.line_no = int(lk[2])
+        # lk = lk[3:]
+        # lk = lk[:-1]
+        # lk = lk.split(', ')
+        # self.line_no = int(lk[2])
+        self.line_no = lk[1]
 
     def set_token(self, lk):
-        lk = lk[3:]
-        lk = lk.split(', ')
-        lk = lk[0]
-        lk = lk[:-1]
-        self.token = lk
+        # lk = lk[3:]
+        # lk = lk.split(', ')
+        # lk = lk[0]
+        # lk = lk[:-1]
+        # self.token = lk
+        self.token = lk[0][0]
+
+    def match(self, terminal):
+        # if self.char == terminal:
+        #     self.get_next()
+        # build tree
+        # else:
+        #     self.add_error_message(self.missing_error_message())
+        if self.is_keyword(self.char) or self.is_symbol(self.char):
+            if self.char == terminal:
+
+                print(terminal)
+                # build tree
+            else:
+                self.add_error_message('missing ' + terminal)
+        else:
+            if self.token == terminal:
+                print(terminal)
+                # build tree
+            else:
+                self.add_error_message('missing ' + terminal)
+        self.get_next()
+
+    def is_keyword(self, v):
+        return v in keywords_set
+
+    def is_symbol(self, v):
+        return v in self.symbols
 
     def check_char_in_first(self, non_terminal):
         if self.is_keyword(self.char) or self.is_symbol(self.char):
@@ -308,31 +338,223 @@ class Parser:
                 self.return_stmt_prime()
 
     def expression(self):
-        pass
-
-    def match(self, terminal):
-        # if self.char == terminal:
-        #     self.get_next()
-        # build tree
-        # else:
-        #     self.add_error_message(self.missing_error_message())
-        if self.is_keyword(self.char) or self.is_symbol(self.char):
-            if self.char == terminal:
-
-                print(terminal)
-                # build tree
-            else:
-                self.add_error_message('missing ' + terminal)
+        if self.check_char_in_first('Simple-expression-zegond'):
+            self.simple_expression_zegond()
+        elif self.char == 'ID':
+            self.match('ID')
+            self.b()
         else:
-            if self.token == terminal:
-                print(terminal)
-                # build tree
-            else:
-                self.add_error_message('missing ' + terminal)
-        self.get_next()
+            if self.non_terminal_panic_mode('Expression'):
+                self.expression()
 
-    def is_keyword(self, v):
-        return v in keywords_set
+    def b(self):
+        if self.char == '=':
+            self.match('=')
+            self.expression()
+        elif self.char == '[':
+            self.match('[')
+            self.expression()
+            self.match(']')
+            self.h()
+        elif self.check_char_in_first('Simple-expression-prime'):
+            self.simple_expression_prime()
+        else:
+            if self.non_terminal_panic_mode('B'):
+                self.b()
 
-    def is_symbol(self, v):
-        return v in self.symbols
+    def h(self):
+        if self.check_char_in_first('Expression'):
+            self.expression()
+        elif self.check_char_in_first('g'):
+            self.g()
+            self.d()
+            self.c()
+        else:
+            if self.non_terminal_panic_mode('H'):
+                self.h()
+
+    def simple_expression_zegond(self):
+        if self.check_char_in_first('Additive-expression-zegond'):
+            self.additive_expression_zegond()
+            self.c()
+        else:
+            if self.non_terminal_panic_mode('Simple-expression-zegond'):
+                self.simple_expression_zegond()
+
+    def simple_expression_prime(self):
+        if self.check_char_in_first('Additive-expression-prime'):
+            self.additive_expression_prime()
+            self.c()
+        else:
+            if self.non_terminal_panic_mode('Simple-expression-prime'):
+                self.simple_expression_prime()
+
+    def c(self):
+        if self.check_char_in_first('Relop'):
+            self.relop()
+            self.additive_expression()
+        else:
+            if self.non_terminal_panic_mode('c'):
+                self.c()
+
+    def relop(self):
+        if self.char == '<':
+            self.match('<')
+        elif self.char == '==':
+            self.match('==')
+        else:
+            if self.non_terminal_panic_mode('Relop'):
+                self.relop()
+
+    def additive_expression(self):
+        if self.check_char_in_first('Term'):
+            self.term()
+            self.d()
+        else:
+            if self.non_terminal_panic_mode('Additive-expression'):
+                self.additive_expression()
+
+    def additive_expression_prime(self):
+        if self.check_char_in_first('Term-prime'):
+            self.term_prime()
+            self.d()
+        else:
+            if self.non_terminal_panic_mode('Additive-expression-prime'):
+                self.additive_expression_prime()
+
+    def additive_expression_zegond(self):
+        if self.check_char_in_first('Term-zegond'):
+            self.term_zegond()
+            self.d()
+        else:
+            if self.non_terminal_panic_mode('Additive-expression-zegond'):
+                self.additive_expression_zegond()
+
+    def d(self):
+        if self.check_char_in_first('Addop'):
+            self.addop()
+            self.term()
+            self.d()
+        else:
+            if self.non_terminal_panic_mode('D'):
+                self.d()
+
+    def addop(self):
+        if self.char == '+':
+            self.match('+')
+        elif self.char == '-':
+            self.match('-')
+        else:
+            if self.non_terminal_panic_mode('addop'):
+                self.addop()
+
+    def term(self):
+        if self.check_char_in_first('Factor'):
+            self.factor()
+            self.g()
+        else:
+            if self.non_terminal_panic_mode('Term'):
+                self.term()
+
+    def term_prime(self):
+        if self.check_char_in_first('Factor-prime'):
+            self.factor_prime()
+            self.g()
+        else:
+            if self.non_terminal_panic_mode('Term-prime'):
+                self.term_prime()
+
+    def term_zegond(self):
+        if self.check_char_in_first('Factor-zegond'):
+            self.factor_zegond()
+            self.g()
+        else:
+            if self.non_terminal_panic_mode('Term-zegond'):
+                self.term_zegond()
+
+    def g(self):
+        if self.char == '*':
+            self.match('*')
+            self.factor()
+            self.g()
+        else:
+            if self.non_terminal_panic_mode('G'):
+                self.g()
+
+    def factor(self):
+        if self.char == '(':
+            self.match('(')
+            self.expression()
+            self.match(')')
+        elif self.char == 'ID':
+            self.match('ID')
+            self.var_call_prime()
+        elif self.char == 'NUM':
+            self.match('NUM')
+        else:
+            if self.non_terminal_panic_mode('Factor'):
+                self.factor()
+
+    def var_call_prime(self):
+        if self.char == '(':
+            self.match('(')
+            self.args()
+            self.match(')')
+        elif self.check_char_in_first('Var-prime'):
+            self.var_prime()
+        else:
+            if self.non_terminal_panic_mode('Var-call-prime'):
+                self.var_call_prime()
+
+    def var_prime(self):
+        if self.char == '[':
+            self.match('[')
+            self.expression()
+            self.match(']')
+        else:
+            if self.non_terminal_panic_mode('Var-prime'):
+                self.var_prime()
+
+    def factor_prime(self):
+        if self.char == '(':
+            self.match('(')
+            self.args()
+            self.match(')')
+        else:
+            if self.non_terminal_panic_mode('Factor_prime'):
+                self.factor_prime()
+
+    def factor_zegond(self):
+        if self.char == '(':
+            self.match('(')
+            self.expression()
+            self.match(')')
+        elif self.char == 'NUM':
+            self.match('NUM')
+        else:
+            if self.non_terminal_panic_mode('Factor-zegond'):
+                self.factor_zegond()
+
+    def args(self):
+        if self.check_char_in_first('Arg-list'):
+            self.arg_list()
+        else:
+            if self.non_terminal_panic_mode('Args'):
+                self.args()
+
+    def arg_list(self):
+        if self.check_char_in_first('Expression'):
+            self.expression()
+            self.arg_list_prime()
+        else:
+            if self.non_terminal_panic_mode('Arg-list'):
+                self.arg_list()
+
+    def arg_list_prime(self):
+        if self.char == ',':
+            self.match(',')
+            self.expression()
+            self.arg_list_prime()
+        else:
+            if self.non_terminal_panic_mode('Arg-list-prime'):
+                self.arg_list_prime()
