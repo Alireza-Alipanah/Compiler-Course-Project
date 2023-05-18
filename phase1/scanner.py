@@ -5,6 +5,7 @@ from phase1.utils.characterchecker import *
 class Scanner:
     input_getter = None
     tokens = dict()
+    last_token = None
     error_messages = dict()
     symbol_table = keywords.copy()
     line_no = 0
@@ -13,9 +14,13 @@ class Scanner:
         self.input_getter = InputGetter(file_path)
 
     def add_token(self, token, line_no):
+        if token is None:
+            self.last_token = None
+            return
         if line_no not in self.tokens:
             self.tokens[line_no] = []
         self.tokens[line_no].append(token)
+        self.last_token = token
 
     def add_error_message(self, error_message, line_no):
         if line_no not in self.error_messages:
@@ -44,6 +49,7 @@ class Scanner:
             return '$'
         else:
             self.unknown_character()
+        return self.last_token
 
     def digits_state(self):
         while is_digit(self.input_getter.get_last_character()):
@@ -109,6 +115,8 @@ class Scanner:
             self.unclosed_comment(line_no)
         elif self.input_getter.get_last_character() != '/':
             self.comment_state(line_no)
+        else:
+            self.add_token(None, None)
 
     def unclosed_comment(self, line_no):
         t = self.input_getter.get_token_content()[:7] + '...'
@@ -119,6 +127,7 @@ class Scanner:
             self.input_getter.read_next_character()
         self.input_getter.set_lookahead(True)
         self.input_getter.get_token_content()
+        self.add_token(None, None)
 
     def unknown_character(self):
         self.add_error_message((self.input_getter.get_token_content(), 'Invalid input'), self.line_no)
