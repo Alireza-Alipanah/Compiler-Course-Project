@@ -20,7 +20,7 @@ class Scanner:
         if line_no not in self.tokens:
             self.tokens[line_no] = []
         self.tokens[line_no].append(token)
-        self.last_token = token
+        self.last_token = (token, line_no)
 
     def add_error_message(self, error_message, line_no):
         if line_no not in self.error_messages:
