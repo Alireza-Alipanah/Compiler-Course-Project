@@ -19,6 +19,7 @@ class InputGetter:
             self.last_character = self.file.read(1)
             if self.last_character == '':
                 self.EOF_reached = True
+                self.file.close()
             else:
                 self.stored_characters.append(self.last_character)
             if self.last_character == '\n':
