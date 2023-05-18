@@ -1,3 +1,11 @@
+def get_pure_token(token):
+    token = token[1:]
+    token = token[:-1]
+    token = token.split(', ')
+    print(token)
+    return token
+
+
 class Parser:
 
     scanner = None
@@ -13,5 +21,6 @@ class Parser:
             self.parse_token(lookahead)
 
     def parse_token(self, lookahead):
-        # todo: write and call individual functions
-        pass
+        token = get_pure_token(lookahead)
+
+
