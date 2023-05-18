@@ -41,7 +41,7 @@ class Scanner:
         elif is_whitespace(last_char):
             self.whitespace_state()
         elif last_char == '':
-            raise EOFError
+            return '$'
         else:
             self.unknown_character()
 

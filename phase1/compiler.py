@@ -9,11 +9,8 @@ if __name__ == '__main__':
 
     scanner = Scanner(input_file_path)
 
-    while True:
-        try:
-            scanner.get_next_token()
-        except EOFError:
-            break
+    while scanner.get_next_token() != '$':
+        pass
 
     write_tokens(token_file_path, scanner.tokens)
     write_lexical_errors(lexical_error_file_path, scanner.error_messages)
