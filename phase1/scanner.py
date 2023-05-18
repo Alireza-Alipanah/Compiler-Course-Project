@@ -1,5 +1,5 @@
-from utils.inputgetter import InputGetter
-from utils.characterchecker import *
+from phase1.utils.inputgetter import InputGetter
+from phase1.utils.characterchecker import *
 
 
 class Scanner:

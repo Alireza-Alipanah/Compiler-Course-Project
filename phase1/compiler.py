@@ -1,5 +1,5 @@
-from scanner import Scanner
-from utils.scanneroutput import *
+from phase1.scanner import Scanner
+from phase1.utils.scanneroutput import *
 
 if __name__ == '__main__':
     input_file_path = "./input.txt"
