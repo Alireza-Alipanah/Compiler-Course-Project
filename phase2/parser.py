@@ -7,7 +7,7 @@ def get_pure_token(token):
     token = token[1:]
     token = token[:-1]
     token = token.split(', ')
-    print(token)
+    # print(token)
     return token
 
 
@@ -30,5 +30,6 @@ class Parser:
 
     def parse_token(self, lookahead):
         token = get_pure_token(lookahead)
-
-
+        # predict_set = json.loads(first[])
+        # if token in
+        # pass
