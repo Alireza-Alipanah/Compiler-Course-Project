@@ -23,9 +23,10 @@ class Parser:
             self.data = json.load(f)
 
     def parse(self):
-        while True:
+        while self.lookahead != '$':
             self.lookahead = self.scanner.get_next_token()
             if self.lookahead == '$':
+                print('errors:::::')
                 print(self.error_messages)
                 # print(RenderTree(parse_tree))
                 break
@@ -37,6 +38,8 @@ class Parser:
                 self.set_line_no(self.lookahead)
                 # self.parse_tree = Node('Program')
                 self.program()
+        print('errors:::::')
+        print(self.error_messages)
 
     def get_next(self):
         self.lookahead = self.scanner.get_next_token()
@@ -55,14 +58,19 @@ class Parser:
         # lk = lk[:-2]
         # self.char = lk[1:]
         # print(self.char)
-        self.char = lk[0][1]
+        # print('hereeeee' + lk[0][1])
+        if lk != '$':
+            self.char = lk[0][1]
+        self.char = '$'
 
     def set_line_no(self, lk):
         # lk = lk[3:]
         # lk = lk[:-1]
         # lk = lk.split(', ')
         # self.line_no = int(lk[2])
-        self.line_no = lk[1]
+        if lk != '$':
+            self.line_no = lk[1]
+        self.line_no = 0 # special case
 
     def set_token(self, lk):
         # lk = lk[3:]
@@ -70,7 +78,9 @@ class Parser:
         # lk = lk[0]
         # lk = lk[:-1]
         # self.token = lk
-        self.token = lk[0][0]
+        if lk != '$':
+            self.token = lk[0][0]
+        self.token = '$'
 
     def match(self, terminal):
         # if self.char == terminal:
@@ -149,8 +159,12 @@ class Parser:
             if self.non_terminal_panic_mode('Program'):
                 self.program()
 
+    def check_for_second_scenario(self, check_for_epsilon, check_in_first):
+        return self.check_epsilon_in_first(check_for_epsilon) and self.check_char_in_first(check_in_first)
+
     def declaration_list(self):
-        if self.check_char_in_first('Declaration'):
+        if self.check_char_in_first('Declaration') or self.check_for_second_scenario('Declaration', 'Declaration-list'):
+
             self.declaration()
             self.declaration_list()
         else:
@@ -342,13 +356,12 @@ class Parser:
     def expression(self):
         if self.check_char_in_first('Simple-expression-zegond'):
             self.simple_expression_zegond()
-        elif self.token == 'ID': # token no char
+        elif self.token == 'ID':  # token no char
             self.match('ID')
             self.b()
         else:
             if self.non_terminal_panic_mode('Expression'):
                 self.expression()
-
 
     def b(self):
         if self.char == '=':
@@ -369,7 +382,7 @@ class Parser:
         if self.char == '=':
             self.match('=')
             self.expression()
-        elif self.check_char_in_first('G'):
+        elif self.check_char_in_first('G') or self.check_for_second_scenario('G', 'D'):
             self.g()
             self.d()
             self.c()
@@ -386,7 +399,8 @@ class Parser:
                 self.simple_expression_zegond()
 
     def simple_expression_prime(self):
-        if self.check_char_in_first('Additive-expression-prime'):
+        if self.check_char_in_first('Additive-expression-prime') or\
+                self.check_for_second_scenario('Additive-expression-prime', 'C'):
             self.additive_expression_prime()
             self.c()
         else:
@@ -419,8 +433,8 @@ class Parser:
                 self.additive_expression()
 
     def additive_expression_prime(self):
-        print(self.data['first']['Term-prime'])
-        if self.check_char_in_first('Term-prime'):
+        # print(self.data['first']['Term-prime'])
+        if self.check_char_in_first('Term-prime') or self.check_for_second_scenario('Term-prime', 'D'):
             self.term_prime()
             self.d()
         else:
@@ -462,7 +476,7 @@ class Parser:
                 self.term()
 
     def term_prime(self):
-        if self.check_char_in_first('Factor-prime'):
+        if self.check_char_in_first('Factor-prime') or self.check_for_second_scenario('Factor-prime', 'G'):
             self.factor_prime()
             self.g()
         else:
@@ -494,7 +508,7 @@ class Parser:
         elif self.token == 'ID':  # token not char
             self.match('ID')
             self.var_call_prime()
-        elif self.token == 'NUM':   # token not char
+        elif self.token == 'NUM':  # token not char
             self.match('NUM')
         else:
             if self.non_terminal_panic_mode('Factor'):
@@ -534,7 +548,7 @@ class Parser:
             self.match('(')
             self.expression()
             self.match(')')
-        elif self.token == 'NUM':   # token not char
+        elif self.token == 'NUM':  # token not char
             self.match('NUM')
         else:
             if self.non_terminal_panic_mode('Factor-zegond'):
