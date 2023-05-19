@@ -10,7 +10,7 @@ class Parser:
     scanner = None
     data = None
     line_no = 0
-    lookahead = None
+    lookahead = []
     token = None
     char = None
     error_messages = dict()
@@ -30,6 +30,7 @@ class Parser:
                 # print(RenderTree(parse_tree))
                 break
             if self.lookahead is not None:
+                print(self.lookahead)
                 # self.lookahead = str(self.lookahead)
                 self.set_token(self.lookahead)
                 self.set_char(self.lookahead)
@@ -41,6 +42,7 @@ class Parser:
         self.lookahead = self.scanner.get_next_token()
         while self.lookahead is None:
             self.lookahead = self.scanner.get_next_token()
+        print(self.lookahead)
         # self.lookahead = str(self.lookahead)
         self.set_token(self.lookahead)
         self.set_char(self.lookahead)
@@ -347,6 +349,7 @@ class Parser:
             if self.non_terminal_panic_mode('Expression'):
                 self.expression()
 
+
     def b(self):
         if self.char == '=':
             self.match('=')
@@ -363,9 +366,10 @@ class Parser:
                 self.b()
 
     def h(self):
-        if self.check_char_in_first('Expression'):
+        if self.char == '=':
+            self.match('=')
             self.expression()
-        elif self.check_char_in_first('g'):
+        elif self.check_char_in_first('G'):
             self.g()
             self.d()
             self.c()
@@ -394,7 +398,7 @@ class Parser:
             self.relop()
             self.additive_expression()
         else:
-            if self.non_terminal_panic_mode('c'):
+            if self.non_terminal_panic_mode('C'):
                 self.c()
 
     def relop(self):
@@ -415,6 +419,7 @@ class Parser:
                 self.additive_expression()
 
     def additive_expression_prime(self):
+        print(self.data['first']['Term-prime'])
         if self.check_char_in_first('Term-prime'):
             self.term_prime()
             self.d()
@@ -445,7 +450,7 @@ class Parser:
         elif self.char == '-':
             self.match('-')
         else:
-            if self.non_terminal_panic_mode('addop'):
+            if self.non_terminal_panic_mode('Addop'):
                 self.addop()
 
     def term(self):
@@ -489,7 +494,7 @@ class Parser:
         elif self.token == 'ID':  # token not char
             self.match('ID')
             self.var_call_prime()
-        elif self.char == 'NUM':
+        elif self.token == 'NUM':   # token not char
             self.match('NUM')
         else:
             if self.non_terminal_panic_mode('Factor'):
@@ -521,7 +526,7 @@ class Parser:
             self.args()
             self.match(')')
         else:
-            if self.non_terminal_panic_mode('Factor_prime'):
+            if self.non_terminal_panic_mode('Factor-prime'):
                 self.factor_prime()
 
     def factor_zegond(self):
@@ -529,7 +534,7 @@ class Parser:
             self.match('(')
             self.expression()
             self.match(')')
-        elif self.char == 'NUM':
+        elif self.token == 'NUM':   # token not char
             self.match('NUM')
         else:
             if self.non_terminal_panic_mode('Factor-zegond'):
