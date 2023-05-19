@@ -61,7 +61,8 @@ class Parser:
         # print('hereeeee' + lk[0][1])
         if lk != '$':
             self.char = lk[0][1]
-        self.char = '$'
+        else:
+            self.char = '$'
 
     def set_line_no(self, lk):
         # lk = lk[3:]
@@ -70,7 +71,8 @@ class Parser:
         # self.line_no = int(lk[2])
         if lk != '$':
             self.line_no = lk[1]
-        self.line_no = 0 # special case
+        else:
+            self.line_no = 0 # special case
 
     def set_token(self, lk):
         # lk = lk[3:]
@@ -80,7 +82,8 @@ class Parser:
         # self.token = lk
         if lk != '$':
             self.token = lk[0][0]
-        self.token = '$'
+        else:
+            self.token = '$'
 
     def match(self, terminal):
         # if self.char == terminal:
