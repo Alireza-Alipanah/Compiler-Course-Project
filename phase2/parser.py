@@ -30,7 +30,7 @@ class Parser:
                 # print(RenderTree(parse_tree))
                 break
             if self.lookahead is not None:
-                self.lookahead = str(self.lookahead)
+                # self.lookahead = str(self.lookahead)
                 self.set_token(self.lookahead)
                 self.set_char(self.lookahead)
                 self.set_line_no(self.lookahead)
@@ -340,7 +340,7 @@ class Parser:
     def expression(self):
         if self.check_char_in_first('Simple-expression-zegond'):
             self.simple_expression_zegond()
-        elif self.char == 'ID':
+        elif self.token == 'ID': # token no char
             self.match('ID')
             self.b()
         else:
@@ -486,7 +486,7 @@ class Parser:
             self.match('(')
             self.expression()
             self.match(')')
-        elif self.char == 'ID':
+        elif self.token == 'ID':  # token not char
             self.match('ID')
             self.var_call_prime()
         elif self.char == 'NUM':
