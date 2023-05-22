@@ -36,7 +36,7 @@ class Parser:
                     self.program_node = None
         end_node = Node('$', self.program_node)
         # print('errors:::::')
-        print(self.error_messages)
+        # print(self.error_messages)
         output_string = ''
         for pre, fill, node in RenderTree(self.program_node):
             output_string += "%s%s\n" % (pre, node.name)
