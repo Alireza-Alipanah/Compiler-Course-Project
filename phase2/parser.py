@@ -41,10 +41,12 @@ class Parser:
         for pre, fill, node in RenderTree(self.program_node):
             output_string += "%s%s\n" % (pre, node.name)
         output_string = output_string[:-1]
-
-        # print(output_string)
-        with open('output.txt', 'w', encoding="utf-8") as f:
+        with open('parse_tree.txt', 'w', encoding="utf-8") as f:
             f.write(output_string)
+
+        output_string2 = 'There is no syntax error.'
+        with open('syntax_errors.txt', 'w', encoding="utf-8") as f:
+            f.write(output_string2)
 
     def get_next(self):
         self.lookahead = self.scanner.get_next_token()
@@ -141,9 +143,6 @@ class Parser:
         else:
             return 'missing ' + self.token
 
-    def epsilon_in_tree(self, parent):
-        child = Node('epsilon', parent)
-
     def non_terminal_panic_mode(self, non_terminal, node):
         if self.check_char_in_follow(non_terminal):
             if self.check_epsilon_in_first(non_terminal):
@@ -156,6 +155,23 @@ class Parser:
             self.add_error_message(self.illegal_error_message())
             self.get_next()
             return False  # Recursion
+
+    def epsilon_in_tree(self, parent):
+        child = Node('epsilon', parent)
+
+    def build_tree_and_return_usage(self, parent, child_name, function):
+        child = Node(child_name, parent)
+        if not self.apply_function(function, child):
+            child = None
+            return False
+        return True
+
+    def build_tree_for_terminals(self, parent, match_parameter):
+        child = Node('(' + self.token + ', ' + self.char + ')', parent)
+        if not self.apply_function(self.match, match_parameter):
+            child = None
+            return False
+        return True
 
     def program(self):
         if self.check_char_in_first('Declaration-list') or self.check_all2_go_to_epsilon('Program', 'Declaration-list'):
@@ -183,20 +199,6 @@ class Parser:
         else:
             return self.non_terminal_panic_mode('Declaration', node)
             # self.declaration()
-
-    def build_tree_and_return_usage(self, parent, child_name, function):
-        child = Node(child_name, parent)
-        if not self.apply_function(function, child):
-            child = None
-            return False
-        return True
-
-    def build_tree_for_terminals(self, parent, match_parameter):
-        child = Node('(' + self.token + ', ' + self.char + ')', parent)
-        if not self.apply_function(self.match, match_parameter):
-            child = None
-            return False
-        return True
 
     def declaration_initial(self, node):
         if self.check_char_in_first('Type-specifier'):
