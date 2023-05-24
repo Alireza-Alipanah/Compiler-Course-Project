@@ -15,6 +15,7 @@ class Parser:
     error_messages = dict()
     symbols = {';', ':', ',', '[', ']', '(', ')', '{', '}', '+', '-', '<', '/', '*', '=', '=='}
     program_node = None
+    reached_eof = False
 
     def __init__(self, scanner_location, predictset_location):
         self.scanner = Scanner(scanner_location)
@@ -75,23 +76,37 @@ class Parser:
         else:
             self.token = '$'
 
+    def missing_terminal_error_message(self, terminal):
+        return 'missing', terminal
+
+    def illegal_terminal_error_message(self, terminal):
+        return 'illegal', terminal
+
     def match(self, terminal):
+        if self.lookahead == '$':
+            if self.reached_eof:
+                return False
+            self.add_error_message(self.unexpected_eof())
+            self.reached_eof = True
+            return False
+            #todo what to return?
         matched = False
         if self.is_keyword(self.char) or self.is_symbol(self.char):
             if self.char == terminal:
                 matched = True
                 # print(terminal)
                 # # build tree
+                self.get_next()
             else:
-                self.add_error_message('missing ' + terminal)
+                self.add_error_message(self.missing_terminal_error_message(terminal))
         else:
             if self.token == terminal:
                 matched = True
                 # print(terminal)
                 # build tree
             else:
-                self.add_error_message('missing ' + terminal)
-        self.get_next()
+                self.add_error_message(self.missing_terminal_error_message(self.token))
+            self.get_next()
         return matched
 
     def is_keyword(self, v):
@@ -143,18 +158,44 @@ class Parser:
         else:
             return 'missing ' + self.token
 
+    def unexpected_eof(self):
+        return 'Unexpected EOF'
+
     def non_terminal_panic_mode(self, non_terminal, node):
+        # if self.check_char_in_follow(non_terminal):
+        #     if self.check_epsilon_in_first(non_terminal):
+        #         self.epsilon_in_tree(node)
+        #         return True
+        #     else:
+        #         self.add_error_message(self.missing_error_message())
+        #         return False  # No recursion
+        # else:
+        #     self.add_error_message(self.illegal_error_message())
+        #     self.get_next()
+        #     return False  # Recursion
+
+        # if self.check_char_in_follow(non_terminal) and self.check_epsilon_in_first(non_terminal):
+        #     self.add_error_message(self.missing_error_message())
+        #     return True
+        # else:
+        #     self.add_error_message(self.illegal_error_message())
+        #     self.get_next()
+        #     return False
+        if self.lookahead == '$':
+            if self.reached_eof:
+                return False
+            self.add_error_message(self.unexpected_eof())
+            self.reached_eof = True
+            return False
+        recurs = self.check_epsilon_in_first(non_terminal)
         if self.check_char_in_follow(non_terminal):
-            if self.check_epsilon_in_first(non_terminal):
-                self.epsilon_in_tree(node)
-                return True
-            else:
-                self.add_error_message(self.missing_error_message())
-                return False  # No recursion
+            self.add_error_message(self.missing_error_message())
+            return False
         else:
             self.add_error_message(self.illegal_error_message())
             self.get_next()
-            return False  # Recursion
+            return recurs
+
 
     def epsilon_in_tree(self, parent):
         child = Node('epsilon', parent)
@@ -298,9 +339,8 @@ class Parser:
             self.build_tree_for_terminals(node, ']')
             return True
         else:
-            return self.non_terminal_panic_mode('Param-prime', node)
-
-            # self.param_prime()
+            if self.non_terminal_panic_mode('Param-prime', node):
+                self.param_prime(node)
 
     def compound_stmt(self, node):
         if self.char == '{':
