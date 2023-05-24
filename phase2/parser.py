@@ -17,6 +17,7 @@ class Parser:
     program_node = None
     reached_eof = False
     early_stop = False
+    errrrr = False
 
     def __init__(self, scanner_location, predictset_location):
         self.scanner = Scanner(scanner_location)
@@ -56,11 +57,11 @@ class Parser:
         for pre, fill, node in RenderTree(self.program_node):
             output_string += "%s%s\n" % (pre, node.name)
         output_string = output_string[:-1]
-        with open('parse_tree.txt', 'w', encoding="utf-8") as f:
+        with open('./parse_tree.txt', 'w', encoding="utf-8") as f:
             f.write(output_string)
 
         output_string2 = self.get_error_messages()
-        with open('syntax_errors.txt', 'w', encoding="utf-8") as f:
+        with open('./syntax_errors.txt', 'w', encoding="utf-8") as f:
             f.write(output_string2)
 
     def get_next(self):
@@ -105,12 +106,14 @@ class Parser:
             self.reached_eof = True
             return None
             # todo what to return?
+        self.early_stop = True
         if self.is_keyword(self.char) or self.is_symbol(self.char):
             if self.char == terminal:
                 # print(terminal)
                 # # build tree
                 t = self.token_node()
                 self.get_next()
+                self.early_stop = False
                 return t
             else:
                 self.add_error_message(self.missing_terminal_error_message(terminal))
@@ -120,6 +123,7 @@ class Parser:
                 # build tree
                 t = self.token_node()
                 self.get_next()
+                self.early_stop = False
                 return t
             else:
                 self.add_error_message(self.missing_terminal_error_message(self.token))
@@ -204,14 +208,15 @@ class Parser:
         #     self.get_next()
         #     return False
         if self.lookahead == '$':
-            self.early_stop = True
             if self.reached_eof:
                 return False
             self.add_error_message(self.unexpected_eof())
             self.reached_eof = True
             return False
         recurs = self.check_epsilon_in_first(non_terminal)
+        self.early_stop = True
         if self.check_char_in_follow(non_terminal):
+            self.early_stop = False
             if not recurs:
                 self.add_error_message(self.missing_error_message())
             return False

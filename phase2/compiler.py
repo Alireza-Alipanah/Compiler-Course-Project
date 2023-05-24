@@ -2,8 +2,8 @@ from phase2.parser import Parser
 
 
 if __name__ == '__main__':
-    input_file_path = "../tests/T07/input.txt"
+    input_file_path = "../tests/T03/input.txt"
 
     parser = Parser(input_file_path, './utils/predictset.json')
     parser.parse()
-    print(parser.error_messages)
+    # print(parser.error_messages)
