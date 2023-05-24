@@ -16,11 +16,21 @@ class Parser:
     symbols = {';', ':', ',', '[', ']', '(', ')', '{', '}', '+', '-', '<', '/', '*', '=', '=='}
     program_node = None
     reached_eof = False
+    early_stop = False
 
     def __init__(self, scanner_location, predictset_location):
         self.scanner = Scanner(scanner_location)
         with open(predictset_location) as f:
             self.data = json.load(f)
+
+    def get_error_messages(self):
+        if len(self.error_messages) == 0:
+            return 'There is no syntax error.'
+        res = []
+        for key in sorted(list(self.error_messages.keys())):
+            for i in self.error_messages[key]:
+                res.append('#' + str(key) + ' : syntax error, ' + i)
+        return '\n'.join(res)
 
     def parse(self):
         while self.lookahead != '$':
@@ -31,13 +41,15 @@ class Parser:
                 self.set_token(self.lookahead)
                 self.set_char(self.lookahead)
                 self.set_line_no(self.lookahead)
-                self.program_node = Node('Program')
-                f = self.program()
-                if not f:
-                    self.program_node = None
+                # self.program_node = Node('Program')
+                self.program_node = self.program()
+                # if not f:
+                #     self.program_node = None
         if len(self.error_messages) == 1:
             self.error_messages = {}
-        end_node = Node('$', self.program_node)
+        # end_node = Node('$', self.program_node)
+        if not self.early_stop:
+            Node('$', self.program_node)
         # print('errors:::::')
         # print(self.error_messages)
         output_string = ''
@@ -47,7 +59,7 @@ class Parser:
         with open('parse_tree.txt', 'w', encoding="utf-8") as f:
             f.write(output_string)
 
-        output_string2 = 'There is no syntax error.'
+        output_string2 = self.get_error_messages()
         with open('syntax_errors.txt', 'w', encoding="utf-8") as f:
             f.write(output_string2)
 
@@ -67,10 +79,11 @@ class Parser:
             self.char = '$'
 
     def set_line_no(self, lk):
-        if lk != '$':
-            self.line_no = lk[1]
-        else:
-            self.line_no = 0  # special case
+        # if lk != '$':
+        #     self.line_no = lk[1]
+        # else:
+        #     self.line_no = 0  # special case
+        self.line_no = self.scanner.line_no
 
     def set_token(self, lk):
         if lk != '$':
@@ -79,37 +92,38 @@ class Parser:
             self.token = '$'
 
     def missing_terminal_error_message(self, terminal):
-        return 'missing', terminal
+        return 'missing ' + terminal
 
     def illegal_terminal_error_message(self, terminal):
-        return 'illegal', terminal
+        return 'illegal ' + terminal
 
     def match(self, terminal):
         if self.lookahead == '$':
             if self.reached_eof:
-                return False
+                return None
             self.add_error_message(self.unexpected_eof())
             self.reached_eof = True
-            return False
-            #todo what to return?
-        matched = False
+            return None
+            # todo what to return?
         if self.is_keyword(self.char) or self.is_symbol(self.char):
             if self.char == terminal:
-                matched = True
                 # print(terminal)
                 # # build tree
+                t = self.token_node()
                 self.get_next()
+                return t
             else:
                 self.add_error_message(self.missing_terminal_error_message(terminal))
         else:
             if self.token == terminal:
-                matched = True
                 # print(terminal)
                 # build tree
+                t = self.token_node()
+                self.get_next()
+                return t
             else:
                 self.add_error_message(self.missing_terminal_error_message(self.token))
             self.get_next()
-        return matched
 
     def is_keyword(self, v):
         return v in keywords_set
@@ -130,7 +144,7 @@ class Parser:
 
     def check_all3_go_to_epsilon(self, a, b, c):
         return 'EPSILON' in self.data['first'][a] and 'EPSILON' in self.data['first'][b] \
-               and 'EPSILON' in self.data['first'][c]
+            and 'EPSILON' in self.data['first'][c]
 
     def check_char_in_follow(self, non_terminal):
         if self.is_keyword(self.char) or self.is_symbol(self.char):
@@ -161,9 +175,15 @@ class Parser:
             return 'missing ' + self.token
 
     def unexpected_eof(self):
+        ln = self.line_no
+        self.line_no = -1
+        while ln != self.line_no:
+            self.get_next()
+            ln = self.line_no
+        self.line_no = ln
         return 'Unexpected EOF'
 
-    def non_terminal_panic_mode(self, non_terminal, node):
+    def non_terminal_panic_mode(self, non_terminal):
         # if self.check_char_in_follow(non_terminal):
         #     if self.check_epsilon_in_first(non_terminal):
         #         self.epsilon_in_tree(node)
@@ -184,6 +204,7 @@ class Parser:
         #     self.get_next()
         #     return False
         if self.lookahead == '$':
+            self.early_stop = True
             if self.reached_eof:
                 return False
             self.add_error_message(self.unexpected_eof())
@@ -199,538 +220,651 @@ class Parser:
             self.get_next()
             return recurs
 
-
     def epsilon_in_tree(self, parent):
-        child = Node('epsilon', parent)
+        # child = Node('epsilon', parent)
+        Node('epsilon', parent)
 
-    def build_tree_and_return_usage(self, parent, child_name, function):
-        child = Node(child_name, parent)
-        if not self.apply_function(function, child):
-            child = None
-            return False
-        return True
+    def token_node(self):
+        return Node('(' + self.token + ', ' + self.char + ')')
 
-    def build_tree_for_terminals(self, parent, match_parameter):
-        child = Node('(' + self.token + ', ' + self.char + ')', parent)
-        if not self.apply_function(self.match, match_parameter):
-            child = None
-            return False
-        return True
+    def non_terminal_node(self, parent, name):
+        Node(name, parent)
+
+    def filter_none(self, ls):
+        return list(filter(lambda item: item is not None, ls))
+
+    # def build_tree_and_return_usage(self, parent, child_name, function):
+    #     child = Node(child_name, parent)
+    #     if not self.apply_function(function, child):
+    #         child = None
+    #         return False
+    #     return True
+    #
+    # def build_tree_for_terminals(self, parent, match_parameter):
+    #     child = Node('(' + self.token + ', ' + self.char + ')', parent)
+    #     if not self.apply_function(self.match, match_parameter):
+    #         child = None
+    #         return False
+    #     return True
 
     def program(self):
         if self.check_char_in_first('Declaration-list') or self.check_all2_go_to_epsilon('Program', 'Declaration-list'):
-            return self.build_tree_and_return_usage(self.program_node, 'Declaration-list', self.declaration_list)
+            return Node('Program', children=self.filter_none([self.declaration_list()]))
         else:
-            return self.non_terminal_panic_mode('Program', self.program_node)
-            # self.program()
+            self.non_terminal_panic_mode('Program')
+            return Node('')
 
-    def declaration_list(self, node):
+    def declaration_list(self):
         if self.check_char_in_first('Declaration') or self.check_for_second_scenario('Declaration', 'Declaration-list') \
                 or self.check_all2_go_to_epsilon('Declaration', 'Declaration-list'):
-            self.build_tree_and_return_usage(node, 'Declaration', self.declaration)
-            self.build_tree_and_return_usage(node, 'Declaration-list', self.declaration_list)
-            return True
+            return Node('Declaration-list', children=self.filter_none([
+                self.declaration(),
+                self.declaration_list(),
+            ]))
         else:
-            return self.non_terminal_panic_mode('Declaration-list', node)
-            # self.declaration_list()
+            if self.non_terminal_panic_mode('Declaration-list'):
+                return self.declaration_list()
+            else:
+                if not self.early_stop:
+                    return Node('Declaration-list', children=self.filter_none([Node('epsilon')]))
 
-    def declaration(self, node):
+    def declaration(self):
         if self.check_char_in_first('Declaration-initial') \
                 or self.check_all3_go_to_epsilon('Declaration-initial', 'Declaration-prime', 'Declaration-prime'):
-            self.build_tree_and_return_usage(node, 'Declaration-initial', self.declaration_initial)
-            self.build_tree_and_return_usage(node, 'Declaration-prime', self.declaration_prime)
-            return True
+            return Node('Declaration', children=self.filter_none([
+                self.declaration_initial(),
+                self.declaration_prime()]))
         else:
-            return self.non_terminal_panic_mode('Declaration', node)
-            # self.declaration()
+            self.non_terminal_panic_mode('Declaration')
 
-    def declaration_initial(self, node):
+    def declaration_initial(self):
         if self.check_char_in_first('Type-specifier'):
-            self.build_tree_and_return_usage(node, 'Type-specifier', self.type_specifier)
-            self.build_tree_for_terminals(node, 'ID')
-            return True
+            return Node('Declaration-initial', children=self.filter_none(
+                [self.type_specifier(),
+                 self.match('ID')]
+            ))
         else:
-            return self.non_terminal_panic_mode('Declaration-initial', node)
-            # self.declaration_initial()
+            self.non_terminal_panic_mode('Declaration-initial')
 
-    def declaration_prime(self, node):
+    def declaration_prime(self):
         if self.check_char_in_first('Fun-declaration-prime') \
                 or self.check_all2_go_to_epsilon('Fun-declaration-prime', 'Declaration-prime'):
-            return self.build_tree_and_return_usage(node, 'Fun-declaration-prime', self.fun_declaration_prime)
+            return Node('Declaration-prime', children=self.filter_none([self.fun_declaration_prime()]))
         elif self.check_char_in_first('Var-declaration-prime') \
                 or self.check_all2_go_to_epsilon('Var-declaration-prime', 'Declaration-prime'):
-            return self.build_tree_and_return_usage(node, 'Var-declaration-prime', self.var_declaration_prime)
+            return Node('Declaration-prime', children=self.filter_none([self.var_declaration_prime()]))
         else:
-            return self.non_terminal_panic_mode('Declaration-prime', node)
+            self.non_terminal_panic_mode('Declaration-prime')
             # self.declaration_prime()
 
-    def var_declaration_prime(self, node):
+    def var_declaration_prime(self):
         if self.char == ';':
-            return self.build_tree_for_terminals(node, ';')
+            return Node('Var-declaration-prime', children=self.filter_none([self.match(';')]))
         elif self.char == '[':
-            self.build_tree_for_terminals(node, '[')
-            self.build_tree_for_terminals(node, 'NUM')
-            self.build_tree_for_terminals(node, ']')
-            self.build_tree_for_terminals(node, ';')
-            return True
+            return Node('Var-declaration-prime', children=self.filter_none([
+                self.match('['),
+                self.match('NUM'),
+                self.match(']'),
+                self.match(';')
+            ]))
         else:
-            return self.non_terminal_panic_mode('Var-declaration-prime', node)
+            self.non_terminal_panic_mode('Var-declaration-prime')
 
             # self.var_declaration_prime()
 
-    def fun_declaration_prime(self, node):
+    def fun_declaration_prime(self):
         if self.char == '(':
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Params', self.params)
-            self.build_tree_for_terminals(node, ')')
-            self.build_tree_and_return_usage(node, 'Compound-stmt', self.compound_stmt)
-            return True
+            return Node('Fun-declaration-prime',
+                        children=self.filter_none(
+                            [self.match('('),
+                             self.params(),
+                             self.match(')'),
+                             self.compound_stmt()]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Fun-declaration-prime', node)
+            self.non_terminal_panic_mode('Fun-declaration-prime')
 
             # self.fun_declaration_prime()
 
-    def type_specifier(self, node):
+    def type_specifier(self):
         if self.char == 'int':
-            return self.build_tree_for_terminals(node, 'int')
+            return Node('Type-specifier', children=self.filter_none([self.match('int')]))
         elif self.char == 'void':
-            return self.build_tree_for_terminals(node, 'void')
+            return Node('Type-specifier', children=self.filter_none([self.match('void')]))
         else:
-            return self.non_terminal_panic_mode('Type-specifier', node)
+            self.non_terminal_panic_mode('Type-specifier')
 
             # self.type_specifier()
 
-    def params(self, node):
+    def params(self):
         if self.char == 'int':
-            self.build_tree_for_terminals(node, 'int')
-            self.build_tree_for_terminals(node, 'ID')
-            self.build_tree_and_return_usage(node, 'Param-prime', self.param_prime)
-            self.build_tree_and_return_usage(node, 'Param-list', self.param_prime)
-            return True
+            return Node('Params',
+                        children=self.filter_none(
+                            [self.match('int'),
+                             self.match('ID'),
+                             self.param_prime(),
+                             self.param_list()]
+                        ))
         elif self.char == 'void':
-            return self.build_tree_for_terminals(node, 'void')
+            return Node('Params', children=self.filter_none([self.match('void')]))
         else:
-            return self.non_terminal_panic_mode('Params', node)
+            self.non_terminal_panic_mode('Params')
 
             # self.params()
 
-    def param_list(self, node):
+    def param_list(self):
         if self.char == ',':
-            self.build_tree_for_terminals(node, ',')
-            self.build_tree_and_return_usage(node, 'Param', self.param)
-            self.build_tree_and_return_usage(node, 'Param-list', self.param_list)
-            return True
+            return Node('Param-list',
+                        children=self.filter_none(
+                            [self.match(','),
+                             self.param(),
+                             self.param_list()]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Param-list', node)
+            if self.non_terminal_panic_mode('Param-list'):
+                return self.param_list()
+            else:
+                if not self.early_stop:
+                    return Node('Param-list',
+                                children=self.filter_none(
+                                    [Node('epsilon')]))
 
             # self.param_list()
 
-    def param(self, node):
+    def param(self):
         if self.check_char_in_first('Declaration-initial') \
                 or self.check_all3_go_to_epsilon('Param', 'Declaration-initial', 'Param-prime'):
-            self.build_tree_and_return_usage(node, 'Declaration-initial', self.declaration_initial)
-            self.build_tree_and_return_usage(node, 'Param-prime', self.param_prime)
-            return True
+            return Node('Param',
+                        children=self.filter_none(
+                            [self.declaration_initial(),
+                             self.param_prime()]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Param', node)
+            self.non_terminal_panic_mode('Param')
 
             # self.param()
 
-    def param_prime(self, node):
+    def param_prime(self):
         if self.char == '[':
-            self.build_tree_for_terminals(node, '[')
-            self.build_tree_for_terminals(node, ']')
-            return True
+            return Node('Param-prime',
+                        children=self.filter_none(
+                            [self.match('['),
+                             self.match(']')]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Param-prime', node)
+            if self.non_terminal_panic_mode('Param-prime'):
+                return self.param_prime()
+            else:
+                if not self.early_stop:
+                    return Node('Param-prime',
+                                children=self.filter_none(
+                                    [Node('epsilon')]))
             # self.param_prime(node)
 
-    def compound_stmt(self, node):
+    def compound_stmt(self):
         if self.char == '{':
-            self.build_tree_for_terminals(node, '{')
-            self.build_tree_and_return_usage(node, 'Declaration-list', self.declaration_list)
-            self.build_tree_and_return_usage(node, 'Statement-list', self.statement_list)
-            self.build_tree_for_terminals(node, '}')
-            return True
+            return Node('Compound-stmt',
+                        children=self.filter_none(
+                            [
+                                self.match('{'),
+                                self.declaration_list(),
+                                self.statement_list(),
+                                self.match('}')]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Compound-stmt', node)
+            self.non_terminal_panic_mode('Compound-stmt')
 
             # self.compound_stmt()
 
-    def statement_list(self, node):
+    def statement_list(self):
         if self.check_char_in_first('Statement') or self.check_all2_go_to_epsilon('Statement', 'Statement-list'):
-            self.build_tree_and_return_usage(node, 'Statement', self.statement)
-            self.build_tree_and_return_usage(node, 'Statement-list', self.statement_list)
-            return True
+            return Node('Statement-list',
+                        children=self.filter_none(
+                            [self.statement(),
+                             self.statement_list()]
+                        ))
         else:
-            return self.non_terminal_panic_mode('Statement-list', node)
+            if self.non_terminal_panic_mode('Statement-list'):
+                return self.statement_list()
+            else:
+                if not self.early_stop:
+                    return Node('Statement-list',
+                                children=self.filter_none(
+                                    [Node('epsilon')]))
 
             # self.statement_list()
 
-    def statement(self, node):
+    def statement(self):
         if self.check_char_in_first('Expression-stmt') or self.check_all2_go_to_epsilon('Statement', 'Expression-stmt'):
-            return self.build_tree_and_return_usage(node, 'Expression-stmt', self.expression_stmt)
+            return Node('Statement', children=self.filter_none([self.expression_stmt()]))
         elif self.check_char_in_first('Compound-stmt') or self.check_all2_go_to_epsilon('Statement', 'Compound-stmt'):
-            return self.build_tree_and_return_usage(node, 'Compound-stmt', self.compound_stmt)
+            return Node('Statement', children=self.filter_none([self.compound_stmt()]))
         elif self.check_char_in_first('Selection-stmt') or self.check_all2_go_to_epsilon('Statement', 'Selection-stmt'):
-            return self.build_tree_and_return_usage(node, 'Selection-stmt', self.selection_stmt)
+            return Node('Statement', children=self.filter_none([self.selection_stmt()]))
         elif self.check_char_in_first('Iteration-stmt') or self.check_all2_go_to_epsilon('Statement', 'Iteration-stmt'):
-            return self.build_tree_and_return_usage(node, 'Iteration-stmt', self.iteration_stmt)
+            return Node('Statement', children=self.filter_none([self.iteration_stmt()]))
         elif self.check_char_in_first('Return-stmt') or self.check_all2_go_to_epsilon('Statement', 'Return-stmt'):
-            return self.build_tree_and_return_usage(node, 'Return-stmt', self.return_stmt)
+            return Node('Statement', children=self.filter_none([self.return_stmt()]))
         else:
-            return self.non_terminal_panic_mode('Statement', node)
+            self.non_terminal_panic_mode('Statement')
 
             # self.statement()
 
-    def expression_stmt(self, node):
+    def expression_stmt(self):
         if self.check_char_in_first('Expression'):
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ';')
-            return True
+            return Node('Expression-stmt', children=self.filter_none([self.expression(), self.match(';')]))
         elif self.char == 'break':
-            self.build_tree_for_terminals(node, 'break')
-            self.build_tree_for_terminals(node, ';')
-            return True
+            return Node('Expression-stmt', children=self.filter_none([self.match('break'), self.match(';')]))
         elif self.char == ';':
-            return self.build_tree_for_terminals(node, ';')
+            return Node('Expression-stmt', children=self.filter_none([self.match(';')]))
         else:
-            return self.non_terminal_panic_mode('Expression-stmt', node)
+            self.non_terminal_panic_mode('Expression-stmt')
 
             # self.expression_stmt()
 
-    def selection_stmt(self, node):
+    def selection_stmt(self):
         if self.char == 'if':
-            self.build_tree_for_terminals(node, 'if')
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ')')
-            self.build_tree_and_return_usage(node, 'Statement', self.statement)
-            self.build_tree_for_terminals(node, 'else')
-            self.build_tree_and_return_usage(node, 'Statement', self.statement)
-            return True
+            return Node('Selection-stmt', children=self.filter_none([
+                self.match('if'),
+                self.match('('),
+                self.expression(),
+                self.match(')'),
+                self.statement(),
+                self.match('else'),
+                self.statement()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Selection-stmt', node)
+            self.non_terminal_panic_mode('Selection-stmt')
 
             # self.selection_stmt()
 
-    def iteration_stmt(self, node):
+    def iteration_stmt(self):
         if self.char == 'repeat':
-            self.build_tree_for_terminals(node, 'repeat')
-            self.build_tree_and_return_usage(node, 'Statement', self.statement)
-            self.build_tree_for_terminals(node, 'until')
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ')')
-            return True
+            return Node('Iteration-stmt',
+                        children=self.filter_none([
+                            self.match('repeat'),
+                            self.statement(),
+                            self.match('until'),
+                            self.match('('),
+                            self.expression(),
+                            self.match(')')
+                        ]))
         else:
-            return self.non_terminal_panic_mode('Iteration-stmt', node)
+            self.non_terminal_panic_mode('Iteration-stmt')
 
             # self.iteration_stmt()
 
-    def return_stmt(self, node):
+    def return_stmt(self):
         if self.char == 'return':
-            self.build_tree_for_terminals(node, 'return')
-            self.build_tree_and_return_usage(node, 'Return-stmt-prime', self.return_stmt_prime)
-            return True
+            return Node('Return-stmt', children=[
+                self.match('return'),
+                self.return_stmt_prime()
+            ])
         else:
-            return self.non_terminal_panic_mode('Return-stmt', node)
+            self.non_terminal_panic_mode('Return-stmt')
 
             # self.return_stmt()
 
-    def return_stmt_prime(self, node):
+    def return_stmt_prime(self):
         if self.char == ';':
-            return self.build_tree_for_terminals(node, ';')
+            return Node('Return-stmt-prime', children=[
+                self.match(';')
+            ])
         elif self.check_char_in_first('Expression'):
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ';')
-            return True
+            return Node('Return-stmt-prime', children=[
+                self.expression(),
+                self.match(';')
+            ])
         else:
-            return self.non_terminal_panic_mode('Return-stmt-prime', node)
+            self.non_terminal_panic_mode('Return-stmt-prime')
 
             # self.return_stmt_prime()
 
-    def expression(self, node):
+    def expression(self):
         if self.check_char_in_first('Simple-expression-zegond') \
                 or self.check_all2_go_to_epsilon('Simple-expression-zegond', 'Expression'):
-            return self.build_tree_and_return_usage(node, 'Simple-expression-zegond', self.simple_expression_zegond)
+            return Node('Expression', children=[
+                self.simple_expression_zegond()
+            ])
         elif self.token == 'ID':  # token no char
-            self.build_tree_for_terminals(node, 'ID')
-            self.build_tree_and_return_usage(node, 'B', self.b)
-            return True
+            return Node('Expression', children=[
+                self.match('ID'),
+                self.b()
+            ])
         else:
-            return self.non_terminal_panic_mode('Expression', node)
+            self.non_terminal_panic_mode('Expression')
 
             # self.expression()
 
-    def b(self, node):
+    def b(self):
         if self.char == '=':
-            self.build_tree_for_terminals(node, '=')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            return True
+            return Node('B', children=self.filter_none([
+                self.match('='),
+                self.expression()
+            ]))
         elif self.char == '[':
-            self.build_tree_for_terminals(node, '[')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ']')
-            self.build_tree_and_return_usage(node, 'H', self.h)
-            return True
+            return Node('B', children=self.filter_none([
+                self.match('['),
+                self.expression(),
+                self.match(']'),
+                self.h()
+            ]))
         elif self.check_char_in_first('Simple-expression-prime') \
                 or self.check_all2_go_to_epsilon('B', 'Simple-expression-prime'):
-            return self.build_tree_and_return_usage(node, 'Simple-expression-prime', self.simple_expression_prime)
+            return Node('B', children=self.filter_none([
+                self.simple_expression_prime()
+            ]))
         else:
-            return self.non_terminal_panic_mode('B', node)
+            self.non_terminal_panic_mode('B')
 
             # self.b()
 
-    def h(self, node):
+    def h(self):
         if self.char == '=':
-            self.build_tree_for_terminals(node, '=')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            return True
+            return Node('h', children=self.filter_none([
+                self.match('='),
+                self.expression()
+            ]))
         elif self.check_char_in_first('G') or self.check_for_second_scenario('G', 'D') \
                 or (self.check_all3_go_to_epsilon('H', 'G', 'D') and self.check_epsilon_in_first('C')):
-            self.build_tree_and_return_usage(node, 'G', self.g)
-            self.build_tree_and_return_usage(node, 'D', self.d)
-            self.build_tree_and_return_usage(node, 'C', self.c)
-            return True
+            return Node('h', children=self.filter_none([
+                self.g(),
+                self.d(),
+                self.c()
+            ]))
         else:
-            return self.non_terminal_panic_mode('H', node)
+            self.non_terminal_panic_mode('H')
 
             # self.h()
 
-    def simple_expression_zegond(self, node):
+    def simple_expression_zegond(self):
         if self.check_char_in_first('Additive-expression-zegond') \
                 or self.check_all3_go_to_epsilon('Simple-expression-zegond', 'Additive-expression-zegond', 'C'):
-            self.build_tree_and_return_usage(node, 'Additive-expression-zegond', self.additive_expression_zegond)
-            self.build_tree_and_return_usage(node, 'C', self.c)
-            return True
+            return Node('Simple-expression-zegond', children=self.filter_none([
+                self.additive_expression_zegond(),
+                self.c()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Simple-expression-zegond', node)
+            self.non_terminal_panic_mode('Simple-expression-zegond')
 
             # self.simple_expression_zegond()
 
-    def simple_expression_prime(self, node):
+    def simple_expression_prime(self):
         if self.check_char_in_first('Additive-expression-prime') or \
                 self.check_for_second_scenario('Additive-expression-prime', 'C') \
                 or self.check_all3_go_to_epsilon('Simple-expression-prime', 'Additive-expression-prime', 'C'):
-            self.build_tree_and_return_usage(node, 'Additive-expression-prime', self.additive_expression_prime)
-            self.build_tree_and_return_usage(node, 'C', self.c)
-            return True
+            return Node('Simple-expression-prime', children=self.filter_none([
+                self.additive_expression_prime(),
+                self.c()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Simple-expression-prime', node)
+            self.non_terminal_panic_mode('Simple-expression-prime')
 
             # self.simple_expression_prime()
 
-    def c(self, node):
+    def c(self):
         if self.check_char_in_first('Relop') or self.check_all3_go_to_epsilon('C', 'Relop', 'Additive-expression'):
-            self.build_tree_and_return_usage(node, 'Relop', self.relop)
-            self.build_tree_and_return_usage(node, 'Additive-expression', self.additive_expression)
-            return True
+            return Node('C', children=self.filter_none([
+                self.relop(),
+                self.additive_expression()
+            ]))
             # if not (True )
             #     child = ('epsilon' , node)
             # return True
         else:
-            return self.non_terminal_panic_mode('C', node)
+            if self.non_terminal_panic_mode('C'):
+                return self.c()
+            else:
+                if not self.early_stop:
+                    return Node('C', children=self.filter_none([Node('epsilon')]))
 
             # self.c()
 
-    def relop(self, node):
+    def relop(self):
         if self.char == '<':
-            return self.build_tree_for_terminals(node, '<')
+            return Node('Relop', children=self.filter_none([self.match('<')]))
         elif self.char == '==':
-            return self.build_tree_for_terminals(node, '==')
+            return Node('Relop', children=self.filter_none([self.match('==')]))
         else:
-            return self.non_terminal_panic_mode('Relop', node)
+            self.non_terminal_panic_mode('Relop')
 
             # self.relop()
 
-    def additive_expression(self, node):
+    def additive_expression(self):
         if self.check_char_in_first('Term') or self.check_all3_go_to_epsilon('Additive-expression', 'Term', 'D'):
-            self.build_tree_and_return_usage(node, 'Term', self.term)
-            self.build_tree_and_return_usage(node, 'D', self.d)
-            return True
+            return Node('Additive-expression', children=self.filter_none([
+                self.term(),
+                self.d()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Additive-expression', node)
+            self.non_terminal_panic_mode('Additive-expression')
 
             # self.additive_expression()
 
-    def additive_expression_prime(self, node):
+    def additive_expression_prime(self):
         if self.check_char_in_first('Term-prime') or self.check_for_second_scenario('Term-prime', 'D') \
                 or self.check_all3_go_to_epsilon('Additive-expression-prime', 'Term-prime', 'D'):
-            self.build_tree_and_return_usage(node, 'Term-prime', self.term_prime)
-            self.build_tree_and_return_usage(node, 'D', self.d)
-            return True
+            return Node('Additive-expression-prime', children=self.filter_none([
+                self.term_prime(),
+                self.d()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Additive-expression-prime', node)
+            self.non_terminal_panic_mode('Additive-expression-prime')
 
             # self.additive_expression_prime()
 
-    def additive_expression_zegond(self, node):
+    def additive_expression_zegond(self):
         if self.check_char_in_first('Term-zegond') \
                 or self.check_all3_go_to_epsilon('Additive-expression-zegond', 'Term-zegond', 'D'):
-            self.build_tree_and_return_usage(node, 'Term-zegond', self.term_zegond)
-            self.build_tree_and_return_usage(node, 'D', self.d)
-            return True
+            return Node('Additive-expression-zegond', children=self.filter_none([
+                self.term_zegond(),
+                self.d()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Additive-expression-zegond', node)
+            self.non_terminal_panic_mode('Additive-expression-zegond')
 
             # self.additive_expression_zegond()
 
-    def d(self, node):
+    def d(self):
         if self.check_char_in_first('Addop') or self.check_all3_go_to_epsilon('Addop', 'Term', 'D'):
-            self.build_tree_and_return_usage(node, 'Addop', self.addop)
-            self.build_tree_and_return_usage(node, 'Term', self.term)
-            self.build_tree_and_return_usage(node, 'D', self.d)
-            return True
+            return Node('D', children=self.filter_none([
+                self.addop(),
+                self.term(),
+                self.d()
+            ]))
         else:
-            return self.non_terminal_panic_mode('D', node)
+            if self.non_terminal_panic_mode('D'):
+                return self.d()
+            else:
+                if not self.early_stop:
+                    return Node('D', children=self.filter_none([Node('epsilon')]))
 
             # self.d()
 
-    def addop(self, node):
+    def addop(self):
         if self.char == '+':
-            return self.build_tree_for_terminals(node, '+')
+            return Node('Addop', children=self.filter_none([self.match('+')]))
         elif self.char == '-':
-            return self.build_tree_for_terminals(node, '-')
+            return Node('Addop', children=self.filter_none([self.match('-')]))
         else:
-            return self.non_terminal_panic_mode('Addop', node)
+            self.non_terminal_panic_mode('Addop')
 
             # self.addop()
 
-    def term(self, node):
+    def term(self):
         if self.check_char_in_first('Factor') or self.check_all3_go_to_epsilon('Factor', 'G', 'Term'):
-            self.build_tree_and_return_usage(node, 'Factor', self.factor)
-            self.build_tree_and_return_usage(node, 'G', self.g)
-            return True
+            return Node('Term', children=self.filter_none([
+                self.factor(),
+                self.g()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Term', node)
+            self.non_terminal_panic_mode('Term')
 
             # self.term()
 
-    def term_prime(self, node):
+    def term_prime(self):
         if self.check_char_in_first('Factor-prime') or self.check_for_second_scenario('Factor-prime', 'G') \
                 or self.check_all3_go_to_epsilon('Term-prime', 'Factor-prime', 'G'):
-            self.build_tree_and_return_usage(node, 'Factor-prime', self.factor_prime)
-            self.build_tree_and_return_usage(node, 'G', self.g)
-            return True
+            return Node('Term-prime', children=self.filter_none([
+                self.factor_prime(),
+                self.g()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Term-prime', node)
+            self.non_terminal_panic_mode('Term-prime')
 
             # self.term_prime()
 
-    def term_zegond(self, node):
+    def term_zegond(self):
         if self.check_char_in_first('Factor-zegond') \
                 or self.check_all3_go_to_epsilon('Term-zegond', 'G', 'Factor-zegond'):
-            self.build_tree_and_return_usage(node, 'Factor-zegond', self.factor_zegond)
-            self.build_tree_and_return_usage(node, 'G', self.g)
-            return True
+            return Node('Term-zegond', children=self.filter_none([
+                self.factor_zegond(),
+                self.g()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Term-zegond', node)
+            self.non_terminal_panic_mode('Term-zegond')
 
             # self.term_zegond()
 
-    def g(self, node):
+    def g(self):
         if self.char == '*':
-            self.build_tree_for_terminals(node, '*')
-            self.build_tree_and_return_usage(node, 'Factor', self.factor)
-            self.build_tree_and_return_usage(node, 'G', self.g)
-            return True
+            return Node('G', children=self.filter_none([
+                self.match('*'),
+                self.factor(),
+                self.g()
+            ]))
         else:
-            return self.non_terminal_panic_mode('G', node)
+            if self.non_terminal_panic_mode('G'):
+                return self.g()
+            else:
+                if not self.early_stop:
+                    return Node('G', children=self.filter_none([Node('epsilon')]))
 
             # self.g()
 
-    def factor(self, node):
+    def factor(self):
         if self.char == '(':
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ')')
-            return True
+            return Node('Factor', children=self.filter_none([
+                self.match('('),
+                self.expression(),
+                self.match(')')
+            ]))
         elif self.token == 'ID':  # token not char
-            self.build_tree_for_terminals(node, 'ID')
-            self.build_tree_and_return_usage(node, 'Var-call-prime', self.var_call_prime)
-            return True
+            return Node('Factor', children=self.filter_none([
+                self.match('ID'),
+                self.var_call_prime()
+            ]))
         elif self.token == 'NUM':  # token not char
-            return self.build_tree_for_terminals(node, 'NUM')
+            return Node('Factor', children=self.filter_none([
+                self.match('NUM')
+            ]))
         else:
-            return self.non_terminal_panic_mode('Factor', node)
+            self.non_terminal_panic_mode('Factor')
 
             # self.factor()
 
-    def var_call_prime(self, node):
+    def var_call_prime(self):
         if self.char == '(':
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Args', self.args)
-            self.build_tree_for_terminals(node, ')')
-            return True
+            return Node('Var-call-prime', children=self.filter_none([
+                self.match('('),
+                self.args(),
+                self.match(')')
+            ]))
         elif self.check_char_in_first('Var-prime') or self.check_all2_go_to_epsilon('Var-call-prime', 'Var-prime'):
-            return self.build_tree_and_return_usage(node, 'Var-prime', self.var_prime)
+            return Node('Var-call-prime', children=self.filter_none([
+                self.var_prime()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Var-call-prime', node)
+            self.non_terminal_panic_mode('Var-call-prime')
 
             # self.var_call_prime()
 
-    def var_prime(self, node):
+    def var_prime(self):
         if self.char == '[':
-            self.build_tree_for_terminals(node, '[')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ']')
-            return True
+            return Node('Var-prime', children=self.filter_none([
+                self.match('['),
+                self.expression(),
+                self.match(']')
+            ]))
         else:
-            return self.non_terminal_panic_mode('Var-prime', node)
+            if self.non_terminal_panic_mode('Var-prime'):
+                return self.var_prime()
+            else:
+                if not self.early_stop:
+                    return Node('Var-prime', children=self.filter_none([Node('epsilon')]))
 
             # self.var_prime()
 
-    def factor_prime(self, node):
+    def factor_prime(self):
         if self.char == '(':
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Args', self.args)
-            self.build_tree_for_terminals(node, ')')
-            return True
+            return Node('Factor-prime', children=self.filter_none([
+                self.match('('),
+                self.args(),
+                self.match(')')
+            ]))
         else:
-            return self.non_terminal_panic_mode('Factor-prime', node)
+            if self.non_terminal_panic_mode('Factor-prime'):
+                return self.factor_prime()
+            else:
+                if not self.early_stop:
+                    return Node('Factor-prime', children=self.filter_none([Node('epsilon')]))
 
             # self.factor_prime()
 
-    def factor_zegond(self, node):
+    def factor_zegond(self):
         if self.char == '(':
-            self.build_tree_for_terminals(node, '(')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_for_terminals(node, ')')
-            return True
+            return Node('Factor-zegond', children=self.filter_none([
+                self.match('('),
+                self.expression(),
+                self.match(')')
+            ]))
         elif self.token == 'NUM':  # token not char
-            return self.build_tree_for_terminals(node, 'NUM')
+            return Node('Factor-zegond', children=self.filter_none([
+                self.match('NUM')
+            ]))
         else:
-            return self.non_terminal_panic_mode('Factor-zegond', node)
+            self.non_terminal_panic_mode('Factor-zegond')
 
             # self.factor_zegond()
 
-    def args(self, node):
+    def args(self):
         if self.check_char_in_first('Arg-list') or self.check_all2_go_to_epsilon('Args', 'Arg-list'):
-            return self.build_tree_and_return_usage(node, 'Arg-list', self.arg_list)
+            return Node('Args', children=self.filter_none([
+                self.arg_list()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Args', node)
+            if self.non_terminal_panic_mode('Args'):
+                return self.args()
+            else:
+                if not self.early_stop:
+                    return Node('Args', children=self.filter_none([Node('epsilon')]))
 
             # self.args()
 
-    def arg_list(self, node):
+    def arg_list(self):
         if self.check_char_in_first('Expression') \
                 or self.check_all3_go_to_epsilon('Arg-list', 'Expression', 'Arg-list-prime'):
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_and_return_usage(node, 'Arg-list-prime', self.arg_list_prime)
-            return True
+            return Node('Arg-list', children=self.filter_none([
+                self.expression(),
+                self.arg_list_prime()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Arg-list', node)
+            self.non_terminal_panic_mode('Arg-list')
 
             # self.arg_list()
 
-    def arg_list_prime(self, node):
+    def arg_list_prime(self):
         if self.char == ',':
-            self.build_tree_for_terminals(node, ',')
-            self.build_tree_and_return_usage(node, 'Expression', self.expression)
-            self.build_tree_and_return_usage(node, 'Arg-list-prime', self.arg_list_prime)
-            return True
+            return Node('Arg-list-prime', children=self.filter_none([
+                self.match(','),
+                self.expression(),
+                self.arg_list_prime()
+            ]))
         else:
-            return self.non_terminal_panic_mode('Arg-list-prime', node)
+            if self.non_terminal_panic_mode('Arg-list-prime'):
+                return self.arg_list_prime()
+            else:
+                if not self.early_stop:
+                    return Node('Arg-list-prime', children=self.filter_none([Node('epsilon')]))
 
             # self.arg_list_prime()
