@@ -46,8 +46,8 @@ class Parser:
                 self.program_node = self.program()
                 # if not f:
                 #     self.program_node = None
-        if len(self.error_messages) == 1:
-            self.error_messages = {}
+        # if len(self.error_messages) == 1:
+        #     self.error_messages = {}
         # end_node = Node('$', self.program_node)
         if not self.early_stop:
             Node('$', self.program_node)
@@ -210,7 +210,8 @@ class Parser:
         if self.lookahead == '$':
             if self.reached_eof:
                 return False
-            self.add_error_message(self.unexpected_eof())
+            if self.early_stop:
+                self.add_error_message(self.unexpected_eof())
             self.reached_eof = True
             return False
         recurs = self.check_epsilon_in_first(non_terminal)
