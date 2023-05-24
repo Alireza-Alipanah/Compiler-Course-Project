@@ -35,6 +35,8 @@ class Parser:
                 f = self.program()
                 if not f:
                     self.program_node = None
+        if len(self.error_messages) == 1:
+            self.error_messages = {}
         end_node = Node('$', self.program_node)
         # print('errors:::::')
         # print(self.error_messages)
@@ -189,7 +191,8 @@ class Parser:
             return False
         recurs = self.check_epsilon_in_first(non_terminal)
         if self.check_char_in_follow(non_terminal):
-            self.add_error_message(self.missing_error_message())
+            if not recurs:
+                self.add_error_message(self.missing_error_message())
             return False
         else:
             self.add_error_message(self.illegal_error_message())
