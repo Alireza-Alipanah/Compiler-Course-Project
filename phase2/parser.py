@@ -501,10 +501,10 @@ class Parser:
 
     def return_stmt(self):
         if self.char == 'return':
-            return Node('Return-stmt', children=[
+            return Node('Return-stmt', children=self.filter_none([
                 self.match('return'),
                 self.return_stmt_prime()
-            ])
+            ]))
         else:
             self.non_terminal_panic_mode('Return-stmt')
 
@@ -512,14 +512,14 @@ class Parser:
 
     def return_stmt_prime(self):
         if self.char == ';':
-            return Node('Return-stmt-prime', children=[
+            return Node('Return-stmt-prime', children=self.filter_none([
                 self.match(';')
-            ])
+            ]))
         elif self.check_char_in_first('Expression'):
-            return Node('Return-stmt-prime', children=[
+            return Node('Return-stmt-prime', children=self.filter_none([
                 self.expression(),
                 self.match(';')
-            ])
+            ]))
         else:
             self.non_terminal_panic_mode('Return-stmt-prime')
 
@@ -528,14 +528,14 @@ class Parser:
     def expression(self):
         if self.check_char_in_first('Simple-expression-zegond') \
                 or self.check_all2_go_to_epsilon('Simple-expression-zegond', 'Expression'):
-            return Node('Expression', children=[
+            return Node('Expression', children=self.filter_none([
                 self.simple_expression_zegond()
-            ])
+            ]))
         elif self.token == 'ID':  # token no char
-            return Node('Expression', children=[
+            return Node('Expression', children=self.filter_none([
                 self.match('ID'),
                 self.b()
-            ])
+            ]))
         else:
             self.non_terminal_panic_mode('Expression')
 
@@ -566,13 +566,13 @@ class Parser:
 
     def h(self):
         if self.char == '=':
-            return Node('h', children=self.filter_none([
+            return Node('H', children=self.filter_none([
                 self.match('='),
                 self.expression()
             ]))
         elif self.check_char_in_first('G') or self.check_for_second_scenario('G', 'D') \
                 or (self.check_all3_go_to_epsilon('H', 'G', 'D') and self.check_epsilon_in_first('C')):
-            return Node('h', children=self.filter_none([
+            return Node('H', children=self.filter_none([
                 self.g(),
                 self.d(),
                 self.c()
