@@ -342,8 +342,8 @@ class Parser:
             self.build_tree_for_terminals(node, ']')
             return True
         else:
-            if self.non_terminal_panic_mode('Param-prime', node):
-                self.param_prime(node)
+            return self.non_terminal_panic_mode('Param-prime', node)
+            # self.param_prime(node)
 
     def compound_stmt(self, node):
         if self.char == '{':
