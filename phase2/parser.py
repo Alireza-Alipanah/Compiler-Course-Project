@@ -17,7 +17,6 @@ class Parser:
     program_node = None
     reached_eof = False
     early_stop = False
-    errrrr = False
 
     def __init__(self, scanner_location, predictset_location):
         self.scanner = Scanner(scanner_location)
@@ -126,8 +125,7 @@ class Parser:
                 self.early_stop = False
                 return t
             else:
-                self.add_error_message(self.missing_terminal_error_message(self.token))
-            self.get_next()
+                self.add_error_message(self.missing_terminal_error_message(terminal))
 
     def is_keyword(self, v):
         return v in keywords_set
@@ -172,8 +170,10 @@ class Parser:
         else:
             return 'illegal ' + self.token
 
-    def missing_error_message(self):
-        if self.is_keyword(self.char) or self.is_symbol(self.char):
+    def missing_error_message(self, nt):
+        if nt == 'Params' or nt == 'Declaration-prime':
+            return 'missing ' + nt
+        elif self.is_keyword(self.char) or self.is_symbol(self.char):
             return 'missing ' + self.char
         else:
             return 'missing ' + self.token
@@ -219,7 +219,7 @@ class Parser:
         if self.check_char_in_follow(non_terminal):
             self.early_stop = False
             if not recurs:
-                self.add_error_message(self.missing_error_message())
+                self.add_error_message(self.missing_error_message(non_terminal))
             return False
         else:
             self.add_error_message(self.illegal_error_message())
@@ -320,10 +320,12 @@ class Parser:
 
     def fun_declaration_prime(self):
         if self.char == '(':
+            a, b = self.match('('), self.params()
+            if b is None:
+                self.add_error_message(self.missing_error_message('Params'))
             return Node('Fun-declaration-prime',
                         children=self.filter_none(
-                            [self.match('('),
-                             self.params(),
+                            [a,b,
                              self.match(')'),
                              self.compound_stmt()]
                         ))
