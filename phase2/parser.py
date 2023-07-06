@@ -574,14 +574,17 @@ class Parser:
     def b(self):
         if self.char == '=':
             return Node('B', children=self.filter_none([
+                self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
-                self.expression()
+                self.expression(),
+                self.codegen.choose_action('assign', self.lookahead)
             ]))
         elif self.char == '[':
             return Node('B', children=self.filter_none([
                 self.match('['),
                 self.expression(),
                 self.match(']'),
+                self.codegen.choose_action('arr_acc', self.lookahead),
                 self.h()
             ]))
         elif self.check_char_in_first('Simple-expression-prime') \
@@ -597,8 +600,10 @@ class Parser:
     def h(self):
         if self.char == '=':
             return Node('H', children=self.filter_none([
+                self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
-                self.expression()
+                self.expression(),
+                self.codegen.choose_action('assign', self.lookahead)
             ]))
         elif self.check_char_in_first('G') or self.check_for_second_scenario('G', 'D') \
                 or (self.check_all3_go_to_epsilon('H', 'G', 'D') and self.check_epsilon_in_first('C')):
@@ -640,8 +645,10 @@ class Parser:
     def c(self):
         if self.check_char_in_first('Relop') or self.check_all3_go_to_epsilon('C', 'Relop', 'Additive-expression'):
             return Node('C', children=self.filter_none([
+                self.codegen.choose_action('pushop', self.lookahead),
                 self.relop(),
-                self.additive_expression()
+                self.additive_expression(),
+                self.codegen.choose_action('cmp', self.lookahead),
             ]))
             # if not (True )
             #     child = ('epsilon' , node)
@@ -703,9 +710,11 @@ class Parser:
     def d(self):
         if self.check_char_in_first('Addop') or self.check_all3_go_to_epsilon('Addop', 'Term', 'D'):
             return Node('D', children=self.filter_none([
+                self.codegen.choose_action('pushop', self.lookahead),
                 self.addop(),
                 self.term(),
-                self.d()
+                self.d(),
+                self.codegen.choose_action('add_sub', self.lookahead)
             ]))
         else:
             if self.non_terminal_panic_mode('D'):
@@ -766,6 +775,7 @@ class Parser:
             return Node('G', children=self.filter_none([
                 self.match('*'),
                 self.factor(),
+                self.codegen.choose_action('mul', self.lookahead),
                 self.g()
             ]))
         else:
@@ -786,11 +796,13 @@ class Parser:
             ]))
         elif self.token == 'ID':  # token not char
             return Node('Factor', children=self.filter_none([
+                self.codegen.choose_action('pid', self.lookahead),
                 self.match('ID'),
                 self.var_call_prime()
             ]))
         elif self.token == 'NUM':  # token not char
             return Node('Factor', children=self.filter_none([
+                self.codegen.choose_action('pnum', self.lookahead),
                 self.match('NUM')
             ]))
         else:
@@ -819,7 +831,8 @@ class Parser:
             return Node('Var-prime', children=self.filter_none([
                 self.match('['),
                 self.expression(),
-                self.match(']')
+                self.match(']'),
+                self.codegen.choose_action('arr_acc', self.lookahead),
             ]))
         else:
             if self.non_terminal_panic_mode('Var-prime'):
@@ -855,6 +868,7 @@ class Parser:
             ]))
         elif self.token == 'NUM':  # token not char
             return Node('Factor-zegond', children=self.filter_none([
+                self.codegen.choose_action('pnum', self.lookahead),
                 self.match('NUM')
             ]))
         else:
