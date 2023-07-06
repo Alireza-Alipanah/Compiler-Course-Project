@@ -5,16 +5,20 @@ class CodeGen:
     program_block_counter = 0
     lookahead = None
     temp_addr = 500
+    digits = set([str(i) for i in range(0, 10)])
 
     def __init__(self):
         pass
 
     def choose_action(self, action, lookahead):
         self.lookahead = lookahead
+        # print(action)
         if action == 'pid':
             self.pid()
         elif action == 'ptype':
             self.ptype()
+        elif action == 'pnum':
+            self.pnum()
         elif action == 'var_dec':
             self.var_declaration()
         elif action == 'array_dec':
@@ -41,8 +45,8 @@ class CodeGen:
             self.push_assign()
         elif action == 'assign':
             self.assign()
-        elif action == 'arr_acc':
-            pass # todo
+        elif action == 'arr_idx':
+            self.array_idx()
         elif action == 'pushop':
             self.pushop()
         elif action == 'cmp':
@@ -51,14 +55,15 @@ class CodeGen:
             self.add_sub()
         elif action == 'mul':
             self.mul()
-
+        elif action == 'output':
+            self.output()
 
     def pid(self):
-        if self.get_lk_char() != 'output':  # and self.get_char() != 'main'
+        if self.get_lk_char() != 'output' and self.get_lk_char() != 'main':
             self.ss.append(self.lookahead)
 
     def ptype(self):
-        if self.get_lk_char() != 'output':  # and self.get_char() != 'main'
+        if self.get_lk_char() != 'output':  # and self.get_lk_char() != 'main'
             self.ss.append(self.lookahead)
 
     def initialize(self):
@@ -69,40 +74,59 @@ class CodeGen:
 
     def var_declaration(self):
         var = self.ss.pop()
-        self.set_type_of_element(var[0][1], var[0][0])
-        self.set_temp(var[0][1])
+        self.set_type_of_element(self.get_var_char(var), self.get_var_type(var))
+        self.set_temp(self.get_var_char(var))
         self.code_gen_two_arg('ASSIGN', '#0', self.temp_addr)
-        #semantic_stack.append(identifier)  # for semantic check
+        # semantic_stack.append(identifier)  # for semantic check
         self.update_temp_addr(1)
 
     def array_dec(self):
         size_of_array = int(self.get_lk_char())
+        var = self.ss.pop()
+        type_of_var = self.ss[-1]
+        self.set_type_of_element(self.get_var_char(var), type_of_var)
+        self.set_temp(self.get_var_char(var))
+        self.code_gen_two_arg('ASSIGN', '#0', self.temp_addr)
+        # semantic_stack.append(identifier)  # for semantic check
         self.update_temp_addr(size_of_array)
-        pass
+
+    def array_idx(self):
+        idx = self.ss.pop()
+        idx = self.get_var_char(idx)
+        var = self.ss.pop()
+        var = self.get_var_char(var)
+        self.code_gen_three_arg('MULT', self.get_addr_of_var(idx), '#4', self.temp_addr)
+        self.code_gen_three_arg('ADD', '#' +str( self.get_addr_of_var(var)), self.temp_addr, self.temp_addr)
+        self.ss.append('@' + str(self.temp_addr))
+        self.update_temp_addr(1)
 
     def break_jump(self):
         self.code_gen_one_arg('JP', self.ss[-2])
 
     def save(self):
         self.ss.append(self.program_block_counter)
-        self.program_block_counter += 1
+        self.code_gen_one_arg('GAP', 584)  # GAP #584 is a fake number
+        # self.program_block_counter += 1
 
     def jpf_save(self):
         i = self.ss.pop()
-        self.manual_code_gen_two_arg('JPF', self.ss.pop, self.program_block_counter + 1, i)
+        i2 = self.ss.pop()
+        self.manual_code_gen_two_arg('JPF', i2, self.program_block_counter + 1, i)
         # save()
         self.ss.append(self.program_block_counter)
-        self.program_block_counter += 1
+        self.code_gen_one_arg('GAP', 584) #GAP #584 is a fake number
+
 
     def jp_save(self):
         self.manual_code_gen_one_arg('JP', self.program_block_counter, self.ss.pop())
-        self.ss.pop()
+        # self.ss.pop()
 
     def jp_until(self):
         self.code_gen_one_arg('JP', self.program_block_counter + 2)
         # save()
         self.ss.append(self.program_block_counter)
-        self.program_block_counter += 1
+        self.code_gen_one_arg('GAP', 584)  #GAP, it is gonna be filled in future  #584 is a fake number
+        # self.program_block_counter += 1
         # label()
         self.ss.append(self.program_block_counter)
 
@@ -113,16 +137,49 @@ class CodeGen:
     def label(self):
         self.ss.append(self.program_block_counter)
 
+    def output(self):
+        out = self.ss.pop()
+        out = self.get_var_char(out)
+        out = self.get_addr_of_var(out)
+        self.code_gen_one_arg('PRINT', out)
+
+    ###################
     def push_assign(self):
-        self.ss.append(self.lookahead)
+        if self.get_lk_char() != 'output':  # and self.get_char() != 'main'
+            self.ss.append(self.lookahead)
+        # self.ss.append(self.lookahead)
 
     def assign(self):
         value = self.ss.pop()
         var = self.ss.pop()
-        self.code_gen_two_arg('ASSIGN', value, var)
+        value = self.get_var_char(value)
+        var = self.get_var_char(var)
+        self.code_gen_two_arg('ASSIGN', self.get_addr_of_var(value), self.get_addr_of_var(var))
+
+    def get_var_char(self, val):
+        if isinstance(val, int):
+            return str(val)
+        elif self.is_digit(val):
+            return val
+        elif str(val).startswith(('#', '@')):
+            return val
+        else:
+            return val[0][1]
+
+    def get_addr_of_var(self, var):
+        if not self.is_digit(var):
+            for i in self.symbol_table:
+                if i.lexeme == var:
+                    return i.address
+        return var
+
+    def is_digit(self, v):
+        return v in self.digits
 
     def pushop(self):
-        self.ss.append(self.lookahead)
+        if self.get_lk_char() != 'output':  # and self.get_char() != 'main'
+            self.ss.append(self.lookahead)
+        # self.ss.append(self.lookahead)
 
     def cmp(self):
         value = self.ss.pop()
@@ -131,11 +188,13 @@ class CodeGen:
         tmp = self.temp_addr
         self.update_temp_addr(1)
         self.ss.append(tmp)
-        op = op[0][1]
+        value = self.get_var_char(value)
+        op = self.get_var_char(op)
+        value1 = self.get_var_char(value1)
         if op == '==':
-            self.code_gen_three_arg('EQ', value, value1, tmp)
+            self.code_gen_three_arg('EQ', self.get_addr_of_var(value1), self.get_addr_of_var(value), tmp)
         else:
-            self.code_gen_three_arg('LT', value1, value, tmp)
+            self.code_gen_three_arg('LT', self.get_addr_of_var(value1), self.get_addr_of_var(value), tmp)
 
     def add_sub(self):
         value = self.ss.pop()
@@ -144,25 +203,48 @@ class CodeGen:
         tmp = self.temp_addr
         self.update_temp_addr(1)
         self.ss.append(tmp)
-        op = op[0][1]
+        value = self.get_var_char(value)
+        op = self.get_var_char(op)
+        value1 = self.get_var_char(value1)
         if op == '+':
-            self.code_gen_three_arg('add', value, value1, tmp)
+            self.code_gen_three_arg('ADD', self.get_addr_of_var(value1), self.get_addr_of_var(value), tmp)
         else:
-            self.code_gen_three_arg('LT', value, value1, tmp)
+            self.code_gen_three_arg('SUB', self.get_addr_of_var(value1), self.get_addr_of_var(value), tmp)
 
     def mul(self):
-        value = self.ss.pop()
-        value1 = self.ss.pop()
-        tmp = self.temp_addr
+        # self.ss.append(self.temp_addr)
+        t1 = self.ss.pop()
+        t2 = self.ss.pop()
+        t1 = self.get_var_char(t1)
+        t2 = self.get_var_char(t2)
+        t1 = self.get_addr_of_var(t1)
+        t2 = self.get_addr_of_var(t2)
+        self.code_gen_three_arg('MULT', t1, t2, self.temp_addr)
+        self.ss.append(self.temp_addr)
         self.update_temp_addr(1)
-        self.ss.append(tmp)
-        self.code_gen_three_arg('mult', value, value1, tmp)
+        # value = self.ss.pop()
+        # value1 = self.ss.pop()
+        # tmp = self.temp_addr
+        # self.update_temp_addr(1)
+        # self.ss.append(tmp)
+        # self.code_gen_three_arg('mult', value, value1, tmp)
 
     def pnum(self):
-        tmp = self.temp_addr
-        self.update_temp_addr(1)
-        value = self.get_lk_char()
-        self.code_gen_two_arg('ASSIGN', '#' + value,tmp)
+        if self.get_lk_char() != 'output':  # and self.get_char() != 'main'
+            t = (self.lookahead[0][0], '#' + self.lookahead[0][1])
+            t2 = (t, self.lookahead[1])
+            self.ss.append(t2)
+        # tmp = self.temp_addr
+        # self.update_temp_addr(1)
+        # value = self.get_lk_char()
+        # self.code_gen_two_arg('ASSIGN', '#' + value,tmp)
+
+    ############
+    # def get_var_char(self, var):
+    #     return var[0][1]
+
+    def get_var_type(self, var):
+        return var[0][0]
 
     def get_lk_char(self):
         return self.lookahead[0][1]
@@ -187,9 +269,9 @@ class CodeGen:
         block = [None] * 4
         block[0] = action
         block[1] = a
-        block[2] = '   '
-        block[3] = '   '
-        #self.program_block[self.program_block_counter] = block
+        block[2] = ''
+        block[3] = ''
+        # self.program_block[self.program_block_counter] = block
         self.program_block.append(block)
         self.program_block_counter = self.program_block_counter + 1
 
@@ -197,8 +279,8 @@ class CodeGen:
         block = [None] * 4
         block[0] = action
         block[1] = a
-        block[2] = '   '
-        block[3] = '   '
+        block[2] = ''
+        block[3] = ''
         self.program_block[addr] = block
 
     def code_gen_two_arg(self, action, a, b):
@@ -206,8 +288,8 @@ class CodeGen:
         block[0] = action
         block[1] = a
         block[2] = b
-        block[3] = '   '
-        #self.program_block[self.program_block_counter] = block
+        block[3] = ''
+        # self.program_block[self.program_block_counter] = block
         self.program_block.append(block)
         self.program_block_counter = self.program_block_counter + 1
 
@@ -216,7 +298,7 @@ class CodeGen:
         block[0] = action
         block[1] = a
         block[2] = b
-        block[3] = '   '
+        block[3] = ''
         self.program_block[addr] = block
 
     def code_gen_three_arg(self, action, a, b, c):
@@ -225,6 +307,14 @@ class CodeGen:
         block[1] = a
         block[2] = b
         block[3] = c
-        #self.program_block[self.program_block_counter] = block
+        # self.program_block[self.program_block_counter] = block
         self.program_block.append(block)
         self.program_block_counter = self.program_block_counter + 1
+
+    def check_var_type_error(self):
+        t = self.ss.pop()[0][1]
+        if self.ss.pop()[0][1] == 'void':
+            print("Illegal type of void for '")
+
+    def check_scoping_error(self):
+        pass

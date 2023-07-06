@@ -45,7 +45,8 @@ class Parser:
                 self.set_char(self.lookahead)
                 self.set_line_no(self.lookahead)
                 if self.token == 'KEYWORD' or self.token == 'ID':
-                    self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no))
+                    if not self.check_element_in_symbol_table(self.char):
+                        self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no))
                 # self.program_node = Node('Program')
                 self.program_node = self.program()
                 # if not f:
@@ -69,6 +70,11 @@ class Parser:
             f.write(output_string2)
         print(self.codegen.symbol_table)
 
+    def check_element_in_symbol_table(self, lexeme):
+        for i in self.codegen.symbol_table:
+            if i.lexeme == lexeme:
+                return True
+        return False
     def get_next(self):
         self.lookahead = self.scanner.get_next_token()
         while self.lookahead is None:
@@ -78,7 +84,8 @@ class Parser:
         self.set_char(self.lookahead)
         self.set_line_no(self.lookahead)
         if self.token == 'KEYWORD' or self.token == 'ID':
-            self.codegen.symbol_table.append(self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no)))
+            if not self.check_element_in_symbol_table(self.char):
+                self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no))
 
     def set_char(self, lk):
         if lk != '$':
@@ -310,7 +317,8 @@ class Parser:
                                                    self.fun_declaration_prime()]))
         elif self.check_char_in_first('Var-declaration-prime') \
                 or self.check_all2_go_to_epsilon('Var-declaration-prime', 'Declaration-prime'):
-            return Node('Declaration-prime', children=self.filter_none([self.var_declaration_prime()]))
+            return Node('Declaration-prime', children=self.filter_none([self.var_declaration_prime(),
+                                                                        self.codegen.check_var_type_error()]))
         else:
             self.non_terminal_panic_mode('Declaration-prime')
             # self.declaration_prime()
@@ -351,10 +359,12 @@ class Parser:
     def type_specifier(self):
         if self.char == 'int':
             return Node('Type-specifier', children=self.filter_none([self.codegen.choose_action('ptype', self.lookahead)
-                                                                        , self.match('int')]))
+                                                                        , self.match('int'),
+                                                                     self.codegen.choose_action('pid', self.lookahead)]))
         elif self.char == 'void':
             return Node('Type-specifier', children=self.filter_none([self.codegen.choose_action('ptype', self.lookahead)
-                                                                        , self.match('void')]))
+                                                                        , self.match('void'),
+                                                                     self.codegen.choose_action('pid', self.lookahead)]))
         else:
             self.non_terminal_panic_mode('Type-specifier')
 
@@ -461,7 +471,9 @@ class Parser:
             # self.statement_list()
 
     def statement(self):
-        if self.check_char_in_first('Expression-stmt') or self.check_all2_go_to_epsilon('Statement', 'Expression-stmt'):
+        if self.char == 'output':
+            self.output_stmt()
+        elif self.check_char_in_first('Expression-stmt') or self.check_all2_go_to_epsilon('Statement', 'Expression-stmt'):
             return Node('Statement', children=self.filter_none([self.expression_stmt()]))
         elif self.check_char_in_first('Compound-stmt') or self.check_all2_go_to_epsilon('Statement', 'Compound-stmt'):
             return Node('Statement', children=self.filter_none([self.compound_stmt()]))
@@ -520,8 +532,8 @@ class Parser:
                             self.match('until'),
                             self.match('('),
                             self.expression(),
-                            self.codegen.choose_action('until', self.lookahead),
-                            self.match(')')
+                            self.match(')'),
+                            self.codegen.choose_action('until', self.lookahead)
                         ]))
         else:
             self.non_terminal_panic_mode('Iteration-stmt')
@@ -564,17 +576,25 @@ class Parser:
             return Node('Expression', children=self.filter_none([
                 self.codegen.choose_action('pid', self.lookahead),
                 self.match('ID'),
+                self.codegen.check_scoping_error(),
                 self.b()
             ]))
         else:
             self.non_terminal_panic_mode('Expression')
 
             # self.expression()
+    def output_stmt(self):
+        self.match('output')
+        self.match('(')
+        self.expression()
+        self.match(')')
+        self.codegen.choose_action('output', self.lookahead)
+        self.match(';')
 
     def b(self):
         if self.char == '=':
             return Node('B', children=self.filter_none([
-                self.codegen.choose_action('push_assign', self.lookahead),
+                # self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
                 self.expression(),
                 self.codegen.choose_action('assign', self.lookahead)
@@ -584,7 +604,7 @@ class Parser:
                 self.match('['),
                 self.expression(),
                 self.match(']'),
-                self.codegen.choose_action('arr_acc', self.lookahead),
+                self.codegen.choose_action('arr_idx', self.lookahead),
                 self.h()
             ]))
         elif self.check_char_in_first('Simple-expression-prime') \
@@ -600,7 +620,7 @@ class Parser:
     def h(self):
         if self.char == '=':
             return Node('H', children=self.filter_none([
-                self.codegen.choose_action('push_assign', self.lookahead),
+                # self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
                 self.expression(),
                 self.codegen.choose_action('assign', self.lookahead)
@@ -797,6 +817,7 @@ class Parser:
         elif self.token == 'ID':  # token not char
             return Node('Factor', children=self.filter_none([
                 self.codegen.choose_action('pid', self.lookahead),
+                self.codegen.check_scoping_error(),
                 self.match('ID'),
                 self.var_call_prime()
             ]))
@@ -832,7 +853,7 @@ class Parser:
                 self.match('['),
                 self.expression(),
                 self.match(']'),
-                self.codegen.choose_action('arr_acc', self.lookahead),
+                self.codegen.choose_action('arr_idx', self.lookahead),
             ]))
         else:
             if self.non_terminal_panic_mode('Var-prime'):
