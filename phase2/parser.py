@@ -594,7 +594,7 @@ class Parser:
     def b(self):
         if self.char == '=':
             return Node('B', children=self.filter_none([
-                # self.codegen.choose_action('push_assign', self.lookahead),
+                self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
                 self.expression(),
                 self.codegen.choose_action('assign', self.lookahead)
@@ -620,7 +620,7 @@ class Parser:
     def h(self):
         if self.char == '=':
             return Node('H', children=self.filter_none([
-                # self.codegen.choose_action('push_assign', self.lookahead),
+                self.codegen.choose_action('push_assign', self.lookahead),
                 self.match('='),
                 self.expression(),
                 self.codegen.choose_action('assign', self.lookahead)

@@ -151,10 +151,16 @@ class CodeGen:
 
     def assign(self):
         value = self.ss.pop()
+        self.ss.pop()
         var = self.ss.pop()
         value = self.get_var_char(value)
         var = self.get_var_char(var)
         self.code_gen_two_arg('ASSIGN', self.get_addr_of_var(value), self.get_addr_of_var(var))
+        try:
+            if self.ss[-1][0][1] == '=':
+                self.ss.append((('', var), ''))
+        except Exception:
+            pass
 
     def get_var_char(self, val):
         if isinstance(val, int):
