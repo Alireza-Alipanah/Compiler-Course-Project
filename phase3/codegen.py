@@ -1,11 +1,15 @@
 class CodeGen:
-    symbol_table = []
+    symbol_table = dict()
+    current_function = 'default_function'
     ss = []
     program_block = []
     program_block_counter = 0
     lookahead = None
     temp_addr = 500
     digits = set([str(i) for i in range(0, 10)])
+    func_addr = dict()  # keep address of functions, so we know where to jump
+    return_addr = 996
+    num_of_params_of_functions = dict()
 
     def __init__(self):
         pass
@@ -57,7 +61,55 @@ class CodeGen:
             self.mul()
         elif action == 'output':
             self.output()
+        elif action == 'func_dec':
+            self.func_dec()
+        elif action == 'jp_back':
+            self.jp_back()
+        elif action == 'jp_to_func':
+            self.jp_to_func()
+        elif action == 'var_declaration_param':
+            self.var_declaration_param()
+        elif action == 'array_dec_param':
+            self.array_dec_param()
+        elif action == 'at_least_one_num_of_params':
+            self.at_least_one_num_of_params()
+        elif action == 'increase_num_of_params_by_one':
+            self.increase_num_of_params_by_one()
 
+    ################## phase 4
+    def func_dec(self):
+        name_of_function = self.ss.pop()
+        self.current_function = name_of_function
+        self.num_of_params_of_functions[name_of_function] = 0
+        self.func_addr[name_of_function] = self.program_block_counter
+
+    def jp_back(self):
+        self.code_gen_one_arg('JP', '@' + str(self.return_addr))
+
+    def jp_to_func(self):
+        name_of_function = self.ss.pop()
+        addr_of_function = self.func_addr[name_of_function]
+        self.current_function = name_of_function
+        self.code_gen_one_arg('JP', addr_of_function)
+        self.return_addr = self.program_block_counter
+
+    def var_declaration_param(self):
+        var = self.ss.pop()
+        self.set_type_of_element(self.get_var_char(var), self.get_var_type(var))
+        self.set_temp(self.get_var_char(var))
+        # self.code_gen_two_arg('ASSIGN', '#0', self.temp_addr) # todo: determine what to assign to variable
+        self.update_temp_addr(1)
+
+    def array_dec_param(self):
+        pass  # todo: determine the array that must be assigned
+
+    def at_least_one_num_of_params(self):
+        self.num_of_params_of_functions[self.current_function] = 1
+
+    def increase_num_of_params_by_one(self):
+        self.num_of_params_of_functions[self.current_function] += 1
+
+    ##################
     def pid(self):
         if self.get_lk_char() != 'output' and self.get_lk_char() != 'main':
             self.ss.append(self.lookahead)
@@ -96,7 +148,7 @@ class CodeGen:
         var = self.ss.pop()
         var = self.get_var_char(var)
         self.code_gen_three_arg('MULT', self.get_addr_of_var(idx), '#4', self.temp_addr)
-        self.code_gen_three_arg('ADD', '#' +str( self.get_addr_of_var(var)), self.temp_addr, self.temp_addr)
+        self.code_gen_three_arg('ADD', '#' + str(self.get_addr_of_var(var)), self.temp_addr, self.temp_addr)
         self.ss.append('@' + str(self.temp_addr))
         self.update_temp_addr(1)
 
@@ -114,8 +166,7 @@ class CodeGen:
         self.manual_code_gen_two_arg('JPF', i2, self.program_block_counter + 1, i)
         # save()
         self.ss.append(self.program_block_counter)
-        self.code_gen_one_arg('GAP', 584) #GAP #584 is a fake number
-
+        self.code_gen_one_arg('GAP', 584)  # GAP #584 is a fake number
 
     def jp_save(self):
         self.manual_code_gen_one_arg('JP', self.program_block_counter, self.ss.pop())
@@ -125,7 +176,7 @@ class CodeGen:
         self.code_gen_one_arg('JP', self.program_block_counter + 2)
         # save()
         self.ss.append(self.program_block_counter)
-        self.code_gen_one_arg('GAP', 584)  #GAP, it is gonna be filled in future  #584 is a fake number
+        self.code_gen_one_arg('GAP', 584)  # GAP, it is gonna be filled in future  #584 is a fake number
         # self.program_block_counter += 1
         # label()
         self.ss.append(self.program_block_counter)
@@ -174,7 +225,7 @@ class CodeGen:
 
     def get_addr_of_var(self, var):
         if not self.is_digit(var):
-            for i in self.symbol_table:
+            for i in self.symbol_table[self.current_function]:
                 if i.lexeme == var:
                     return i.address
         return var
@@ -262,12 +313,12 @@ class CodeGen:
         self.temp_addr = self.temp_addr + offset * 4
 
     def set_type_of_element(self, lex, t):
-        for idx in self.symbol_table:
+        for idx in self.symbol_table[self.current_function]:
             if idx.lexeme == lex:
                 idx.type_of_var = t
 
     def set_temp(self, var):
-        for idx in self.symbol_table:
+        for idx in self.symbol_table[self.current_function]:
             if idx.lexeme == var:
                 idx.address = self.temp_addr
 

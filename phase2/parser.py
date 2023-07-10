@@ -6,6 +6,7 @@ from phase1.utils.characterchecker import keywords_set
 from phase3.codegen import CodeGen
 from phase3.element import Element
 
+
 class Parser:
     scanner = None
     codegen = None
@@ -46,7 +47,7 @@ class Parser:
                 self.set_line_no(self.lookahead)
                 if self.token == 'KEYWORD' or self.token == 'ID':
                     if not self.check_element_in_symbol_table(self.char):
-                        self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no))
+                        self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
                 # self.program_node = Node('Program')
                 self.program_node = self.program()
                 # if not f:
@@ -68,13 +69,14 @@ class Parser:
         output_string2 = self.get_error_messages()
         with open('./syntax_errors.txt', 'w', encoding="utf-8") as f:
             f.write(output_string2)
-        print(self.codegen.symbol_table)
+        # print(self.codegen.symbol_table)
 
     def check_element_in_symbol_table(self, lexeme):
-        for i in self.codegen.symbol_table:
+        for i in self.codegen.symbol_table[self.codegen.current_function]:
             if i.lexeme == lexeme:
                 return True
         return False
+
     def get_next(self):
         self.lookahead = self.scanner.get_next_token()
         while self.lookahead is None:
@@ -85,7 +87,7 @@ class Parser:
         self.set_line_no(self.lookahead)
         if self.token == 'KEYWORD' or self.token == 'ID':
             if not self.check_element_in_symbol_table(self.char):
-                self.codegen.symbol_table.append(Element(self.char, self.token, self.line_no))
+                self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
 
     def set_char(self, lk):
         if lk != '$':
@@ -325,8 +327,9 @@ class Parser:
 
     def var_declaration_prime(self):
         if self.char == ';':
-            return Node('Var-declaration-prime', children=self.filter_none([self.codegen.choose_action('var_dec',self.lookahead),
-                                                                            self.match(';')]))
+            return Node('Var-declaration-prime',
+                        children=self.filter_none([self.codegen.choose_action('var_dec', self.lookahead),
+                                                   self.match(';')]))
         elif self.char == '[':
             return Node('Var-declaration-prime', children=self.filter_none([
                 self.match('['),
@@ -341,30 +344,45 @@ class Parser:
             # self.var_declaration_prime()
 
     def fun_declaration_prime(self):
+        # since there is no error in phase 4, I changed this code
         if self.char == '(':
-            a, b = self.match('('), self.params()
-            if b is None:
-                self.add_error_message(self.missing_error_message('Params'))
             return Node('Fun-declaration-prime',
                         children=self.filter_none(
-                            [a, b,
+                            [self.codegen.choose_action('func_dec', self.lookahead),
+                             self.match('('),
+                             self.params(),
                              self.match(')'),
-                             self.compound_stmt()]
+                             self.compound_stmt(),
+                             self.codegen.choose_action('jp_back', self.lookahead)]
                         ))
         else:
             self.non_terminal_panic_mode('Fun-declaration-prime')
+        # if self.char == '(':
+        #     a, b = self.match('('), self.params()
+        #     if b is None:
+        #         self.add_error_message(self.missing_error_message('Params'))
+        #     return Node('Fun-declaration-prime',
+        #                 children=self.filter_none(
+        #                     [a, b,
+        #                      self.match(')'),
+        #                      self.compound_stmt()]
+        #                 ))
+        # else:
+        #     self.non_terminal_panic_mode('Fun-declaration-prime')
 
-            # self.fun_declaration_prime()
+        # self.fun_declaration_prime()
 
     def type_specifier(self):
         if self.char == 'int':
             return Node('Type-specifier', children=self.filter_none([self.codegen.choose_action('ptype', self.lookahead)
                                                                         , self.match('int'),
-                                                                     self.codegen.choose_action('pid', self.lookahead)]))
+                                                                     self.codegen.choose_action('pid',
+                                                                                                self.lookahead)]))
         elif self.char == 'void':
             return Node('Type-specifier', children=self.filter_none([self.codegen.choose_action('ptype', self.lookahead)
                                                                         , self.match('void'),
-                                                                     self.codegen.choose_action('pid', self.lookahead)]))
+                                                                     self.codegen.choose_action('pid',
+                                                                                                self.lookahead)]))
         else:
             self.non_terminal_panic_mode('Type-specifier')
 
@@ -374,11 +392,12 @@ class Parser:
         if self.char == 'int':
             return Node('Params',
                         children=self.filter_none(
-                            [self.codegen.choose_action('ptype', self.lookahead),
+                            [self.codegen.choose_action('at_least_one_num_of_params', self.lookahead),
+                             self.codegen.choose_action('ptype', self.lookahead),
                              self.match('int'),
                              self.match('ID'),
                              self.param_prime(),
-                             self.codegen.choose_action('var_dec', self.lookahead),
+                             self.codegen.choose_action('pid', self.lookahead),
                              self.param_list()]
                         ))
         elif self.char == 'void':
@@ -394,6 +413,7 @@ class Parser:
                         children=self.filter_none(
                             [self.match(','),
                              self.param(),
+                             self.codegen.choose_action('increase_num_of_params_by_one',self.lookahead),
                              self.param_list()]
                         ))
         else:
@@ -425,7 +445,9 @@ class Parser:
             return Node('Param-prime',
                         children=self.filter_none(
                             [self.match('['),
-                             self.match(']')]
+                             self.match(']'),
+                             self.codegen.choose_action('array_dec_param', self.lookahead)]
+
                         ))
         else:
             if self.non_terminal_panic_mode('Param-prime'):
@@ -473,7 +495,8 @@ class Parser:
     def statement(self):
         if self.char == 'output':
             self.output_stmt()
-        elif self.check_char_in_first('Expression-stmt') or self.check_all2_go_to_epsilon('Statement', 'Expression-stmt'):
+        elif self.check_char_in_first('Expression-stmt') or self.check_all2_go_to_epsilon('Statement',
+                                                                                          'Expression-stmt'):
             return Node('Statement', children=self.filter_none([self.expression_stmt()]))
         elif self.check_char_in_first('Compound-stmt') or self.check_all2_go_to_epsilon('Statement', 'Compound-stmt'):
             return Node('Statement', children=self.filter_none([self.compound_stmt()]))
@@ -583,6 +606,7 @@ class Parser:
             self.non_terminal_panic_mode('Expression')
 
             # self.expression()
+
     def output_stmt(self):
         self.match('output')
         self.match('(')
@@ -835,6 +859,7 @@ class Parser:
         if self.char == '(':
             return Node('Var-call-prime', children=self.filter_none([
                 self.match('('),
+                self.codegen.choose_action('jp_to_func', self.lookahead),
                 self.args(),
                 self.match(')')
             ]))
