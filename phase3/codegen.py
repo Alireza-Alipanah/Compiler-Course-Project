@@ -1,3 +1,5 @@
+from phase3.utils.stack import Stack
+
 class CodeGen:
     symbol_table = dict()
     current_function = 'default_function'
@@ -9,10 +11,14 @@ class CodeGen:
     digits = set([str(i) for i in range(0, 10)])
     func_addr = dict()  # keep address of functions, so we know where to jump
     return_addr = 996
+    returned_addr = 992
     num_of_params_of_functions = dict()
+    collect_args = False
+    collected_args = []
+    previous_functions = []
 
     def __init__(self):
-        pass
+        self.program_stack = Stack(self, 1000000)
 
     def choose_action(self, action, lookahead):
         self.lookahead = lookahead
@@ -75,25 +81,35 @@ class CodeGen:
             self.at_least_one_num_of_params()
         elif action == 'increase_num_of_params_by_one':
             self.increase_num_of_params_by_one()
+        elif action == 'collect_args_flag':
+            self.collect_args_flag()
 
     ################## phase 4
     def func_dec(self):
         name_of_function = self.ss.pop()
+        self.previous_functions.append(self.current_function)
         self.current_function = name_of_function
         self.num_of_params_of_functions[name_of_function] = 0
         self.func_addr[name_of_function] = self.program_block_counter
 
     def jp_back(self):
+        self.program_stack.pop(self.return_addr)
         self.code_gen_one_arg('JP', '@' + str(self.return_addr))
 
     def jp_to_func(self):
         name_of_function = self.ss.pop()
         addr_of_function = self.func_addr[name_of_function]
+        self.program_stack.push_value(self.program_block_counter + 1)
+        for i in self.collected_args:
+            self.program_stack.push(self.get_var_char(i))
         self.current_function = name_of_function
         self.code_gen_one_arg('JP', addr_of_function)
-        self.return_addr = self.program_block_counter
+        for i in reversed(range(self.num_of_params_of_functions[self.current_function])):
+            self.program_stack.pop(self.symbol_table[name_of_function][i])
 
     def var_declaration_param(self):
+        self.var_declaration()
+        return
         var = self.ss.pop()
         self.set_type_of_element(self.get_var_char(var), self.get_var_type(var))
         self.set_temp(self.get_var_char(var))
@@ -101,6 +117,7 @@ class CodeGen:
         self.update_temp_addr(1)
 
     def array_dec_param(self):
+        self.array_dec()
         pass  # todo: determine the array that must be assigned
 
     def at_least_one_num_of_params(self):
@@ -109,8 +126,17 @@ class CodeGen:
     def increase_num_of_params_by_one(self):
         self.num_of_params_of_functions[self.current_function] += 1
 
+    def collect_args_flag(self):
+        if self.collect_args:
+            self.collect_args = False
+        else:
+            self.collect_args = True
+            self.collected_args = []
+
     ##################
     def pid(self):
+        if self.collect_args:
+            self.collected_args.append(self.lookahead[0][1])
         if self.get_lk_char() != 'output' and self.get_lk_char() != 'main':
             self.ss.append(self.lookahead)
 

@@ -3,7 +3,7 @@ from phase2.parser import Parser
 
 if __name__ == '__main__':
     i = 1
-    input_file_path = "../Fixed_TestCases_3/TestCases/T8/input.txt"
+    input_file_path = "../phase4_testcases/T1/input.txt"
 
     parser = Parser(input_file_path, './utils/predictset.json')
     parser.parse()

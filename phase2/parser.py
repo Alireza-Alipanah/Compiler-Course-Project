@@ -352,8 +352,7 @@ class Parser:
                              self.match('('),
                              self.params(),
                              self.match(')'),
-                             self.compound_stmt(),
-                             self.codegen.choose_action('jp_back', self.lookahead)]
+                             self.compound_stmt()]
                         ))
         else:
             self.non_terminal_panic_mode('Fun-declaration-prime')
@@ -859,9 +858,9 @@ class Parser:
         if self.char == '(':
             return Node('Var-call-prime', children=self.filter_none([
                 self.match('('),
-                self.codegen.choose_action('jp_to_func', self.lookahead),
                 self.args(),
-                self.match(')')
+                self.match(')'),
+                self.codegen.choose_action('jp_to_func', self.lookahead)
             ]))
         elif self.check_char_in_first('Var-prime') or self.check_all2_go_to_epsilon('Var-call-prime', 'Var-prime'):
             return Node('Var-call-prime', children=self.filter_none([
@@ -940,8 +939,10 @@ class Parser:
         if self.check_char_in_first('Expression') \
                 or self.check_all3_go_to_epsilon('Arg-list', 'Expression', 'Arg-list-prime'):
             return Node('Arg-list', children=self.filter_none([
+                self.codegen.choose_action('collect_args_flag', None),
                 self.expression(),
-                self.arg_list_prime()
+                self.arg_list_prime(),
+                self.codegen.choose_action('collect_args_flag', None)
             ]))
         else:
             self.non_terminal_panic_mode('Arg-list')
