@@ -47,7 +47,8 @@ class Parser:
                 self.set_line_no(self.lookahead)
                 if self.token == 'KEYWORD' or self.token == 'ID':
                     if not self.check_element_in_symbol_table(self.char):
-                        self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
+                        # self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
+                        self.codegen.add_element_to_symbol_table(self.codegen.current_function, Element(self.char, self.token, self.line_no))
                 # self.program_node = Node('Program')
                 self.program_node = self.program()
                 # if not f:
@@ -72,9 +73,11 @@ class Parser:
         # print(self.codegen.symbol_table)
 
     def check_element_in_symbol_table(self, lexeme):
-        for i in self.codegen.symbol_table[self.codegen.current_function]:
-            if i.lexeme == lexeme:
-                return True
+        if self.codegen.current_function in self.codegen.symbol_table.keys():
+            for i in self.codegen.symbol_table[self.codegen.current_function]:
+                if i.lexeme == lexeme:
+                    return True
+            return False
         return False
 
     def get_next(self):
@@ -87,7 +90,9 @@ class Parser:
         self.set_line_no(self.lookahead)
         if self.token == 'KEYWORD' or self.token == 'ID':
             if not self.check_element_in_symbol_table(self.char):
-                self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
+                # self.codegen.symbol_table[self.codegen.current_function].append(Element(self.char, self.token, self.line_no))
+                self.codegen.add_element_to_symbol_table(self.codegen.current_function,
+                                                         Element(self.char, self.token, self.line_no))
 
     def set_char(self, lk):
         if lk != '$':

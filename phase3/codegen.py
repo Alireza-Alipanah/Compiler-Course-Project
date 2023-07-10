@@ -87,6 +87,7 @@ class CodeGen:
     ################## phase 4
     def func_dec(self):
         name_of_function = self.ss.pop()
+        name_of_function = self.get_var_char(name_of_function)
         self.previous_functions.append(self.current_function)
         self.current_function = name_of_function
         self.num_of_params_of_functions[name_of_function] = 0
@@ -125,6 +126,12 @@ class CodeGen:
 
     def increase_num_of_params_by_one(self):
         self.num_of_params_of_functions[self.current_function] += 1
+
+    def add_element_to_symbol_table(self, key, value):
+        if key in self.symbol_table.keys():
+            self.symbol_table[key].append(value)
+        else:
+            self.symbol_table[key] = [value]
 
     def collect_args_flag(self):
         if self.collect_args:
